@@ -1,0 +1,44 @@
+{
+  "name": "hf2d-lab",
+  "private": true,
+  "version": "0.1.0",
+  "description": "A serverless real-space 2D Hartree-Fock molecular dynamics workbench.",
+  "license": "MIT",
+  "author": "Jacqueline Henriksen",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jjjhenriksen/jason-simulator.git"
+  },
+  "bugs": "https://github.com/jjjhenriksen/jason-simulator/issues",
+  "homepage": "https://github.com/jjjhenriksen/jason-simulator#readme",
+  "keywords": ["hartree-fock", "molecular-dynamics", "webassembly", "webgpu", "scientific-computing"],
+  "engines": { "node": ">=22" },
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "npm run wasm:build && tsc -b && vite build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "preview": "vite preview",
+    "wasm:build": "wasm-pack build engine-wasm --target web --out-dir ../src/simulation/wasm/pkg",
+    "check": "npm run test && npm run build"
+  },
+  "dependencies": {
+    "fft.js": "^4.0.4",
+    "fflate": "^0.8.2",
+    "idb-keyval": "^6.2.2",
+    "lucide-react": "^0.468.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.3",
+    "@types/react-dom": "^19.0.2",
+    "@vitejs/plugin-react": "^4.3.4",
+    "@webgpu/types": "^0.1.52",
+    "typescript": "~5.7.2",
+    "vite": "^6.0.5",
+    "vitest": "^4.1.10"
+  }
+}

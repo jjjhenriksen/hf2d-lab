@@ -1,0 +1,17 @@
+{
+  "name": "hf2d-engine",
+  "type": "module",
+  "description": "Float64 numerical kernels for the 2D Hartree-Fock Lab",
+  "version": "0.1.0",
+  "license": "MIT",
+  "files": [
+    "hf2d_engine_bg.wasm",
+    "hf2d_engine.js",
+    "hf2d_engine.d.ts"
+  ],
+  "main": "hf2d_engine.js",
+  "types": "hf2d_engine.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}

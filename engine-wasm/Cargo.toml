@@ -1,0 +1,19 @@
+[package]
+name = "hf2d-engine"
+version = "0.1.0"
+edition = "2024"
+description = "Float64 numerical kernels for the 2D Hartree-Fock Lab"
+license = "MIT"
+repository = "https://github.com/jjjhenriksen/jason-simulator"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+rustfft = "6.2"
+wasm-bindgen = "0.2"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
