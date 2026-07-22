@@ -5,6 +5,8 @@ A serverless scientific workbench for restricted and unrestricted Hartree–Fock
 [![CI](https://github.com/jjjhenriksen/hf2d-lab/actions/workflows/ci.yml/badge.svg)](https://github.com/jjjhenriksen/hf2d-lab/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-0d758c.svg)](LICENSE)
 
+**[Launch the live simulator](https://jacquelinehenriksen.com/hf2d-lab/)**
+
 The interaction convention is
 
 ```text
