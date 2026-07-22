@@ -2,7 +2,7 @@
 
 A serverless scientific workbench for restricted and unrestricted Hartree–Fock Born–Oppenheimer molecular dynamics in a model two-dimensional universe.
 
-[![CI](https://github.com/jjjhenriksen/jason-simulator/actions/workflows/ci.yml/badge.svg)](https://github.com/jjjhenriksen/jason-simulator/actions/workflows/ci.yml)
+[![CI](https://github.com/jjjhenriksen/hf2d-lab/actions/workflows/ci.yml/badge.svg)](https://github.com/jjjhenriksen/hf2d-lab/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-0d758c.svg)](LICENSE)
 
 The interaction convention is

@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 description = "Float64 numerical kernels for the 2D Hartree-Fock Lab"
 license = "MIT"
-repository = "https://github.com/jjjhenriksen/jason-simulator"
+repository = "https://github.com/jjjhenriksen/hf2d-lab"
 
 [lib]
 crate-type = ["cdylib", "rlib"]

@@ -7,10 +7,10 @@
   "author": "Jacqueline Henriksen",
   "repository": {
     "type": "git",
-    "url": "https://github.com/jjjhenriksen/jason-simulator.git"
+    "url": "https://github.com/jjjhenriksen/hf2d-lab.git"
   },
-  "bugs": "https://github.com/jjjhenriksen/jason-simulator/issues",
-  "homepage": "https://github.com/jjjhenriksen/jason-simulator#readme",
+  "bugs": "https://github.com/jjjhenriksen/hf2d-lab/issues",
+  "homepage": "https://github.com/jjjhenriksen/hf2d-lab#readme",
   "keywords": ["hartree-fock", "molecular-dynamics", "webassembly", "webgpu", "scientific-computing"],
   "engines": { "node": ">=22" },
   "type": "module",
