@@ -45,6 +45,8 @@ The physical **Time step Δt** is editable in both guided experiments and the op
 
 The **Damping γ** control is also editable while paused. `γ = 0` preserves molecular dynamics, while positive values exponentially dissipate nuclear velocities; large values provide a relaxation workflow toward local potential-energy minima without bypassing SCF convergence.
 
+Recommended numerical ranges are advisory rather than hard limits. The inspector accepts finite, physically valid values outside those ranges and displays an inline instability warning; structural constraints such as positive masses, compatible spin occupations, supported grid sizes, and resource caps remain enforced.
+
 ## Data
 
 Session export produces an `hf2d-session/v1` ZIP containing the configuration, checkpoint metadata, density and orbital buffers, trajectory and convergence CSV files, backend metadata, and a PNG preview. The last stable configuration is autosaved locally in IndexedDB.

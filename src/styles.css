@@ -260,8 +260,9 @@ button:not(:disabled) { cursor: pointer; }
 .field-row output { display: flex; align-items: center; }
 .field-row small { min-width: 20px; color: var(--muted); }
 .field-row select { appearance: auto; }
-.range-control { width: 100%; accent-color: var(--cyan); }
 .control-note { margin: -2px 0 2px; color: var(--muted); font-size: 12px; line-height: 1.45; }
+.field-warning { display: flex; align-items: flex-start; gap: 6px; margin: -3px 0 3px; color: var(--amber); font-size: 12px; line-height: 1.45; }
+.field-warning svg { flex: 0 0 auto; width: 14px; height: 14px; margin-top: 1px; }
 .convergence-row { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 10px; min-height: 30px; }
 .convergence-row strong { color: var(--muted); font-weight: 500; }
 .convergence-lights, .status-lights { display: flex; gap: 5px; }
