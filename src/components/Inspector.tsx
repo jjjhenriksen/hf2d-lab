@@ -1,5 +1,5 @@
-import { ChevronDown, Download, FileUp, Plus, Trash2 } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { AlertTriangle, ChevronDown, Download, FileUp, Plus, Trash2 } from 'lucide-react'
+import { useEffect, useId, useRef, useState } from 'react'
 import type { BackendCapabilities, Nucleus, SimulationConfig, SimulationSnapshot } from '../simulation/types'
 
 interface InspectorProps {
@@ -60,15 +60,14 @@ export function Inspector(props: InspectorProps) {
       })} />}
 
       <InspectorGroup title="Interaction">
-        <NumberField label="Softening ε" value={config.softening} min={0.05} max={2} step={0.05} unit="a₀" disabled={!editable} onCommit={(value) => update((draft) => { draft.softening = value })} />
-        <input className="range-control" type="range" aria-label="Softening epsilon" min="0.05" max="2" step="0.05" value={config.softening} disabled={!editable} onChange={(event) => update((draft) => { draft.softening = Number(event.target.value) })} />
+        <NumberField label="Softening ε" value={config.softening} positive recommendedMin={0.05} recommendedMax={2} step={0.05} unit="a₀" disabled={!editable} onCommit={(value) => update((draft) => { draft.softening = value })} />
         <ReadoutRow label="Potential" value="Logarithmic 2D" />
       </InspectorGroup>
 
       <InspectorGroup title="SCF">
-        <NumberField label="SCF tolerance" value={config.scf.tolerance} min={1e-9} max={1e-2} step={1e-6} disabled={!editable} exponential onCommit={(value) => update((draft) => { draft.scf.tolerance = value })} />
+        <NumberField label="SCF tolerance" value={config.scf.tolerance} positive recommendedMin={1e-9} recommendedMax={1e-2} step={1e-6} disabled={!editable} exponential onCommit={(value) => update((draft) => { draft.scf.tolerance = value })} />
         <SelectField label="Basis size" value={String(config.gridSize)} disabled={!editable} options={[['64', '64 × 64 grid'], ['128', '128 × 128 grid'], ['256', '256 × 256 experimental']]} onChange={(value) => update((draft) => { draft.gridSize = Number(value) as 64 | 128 | 256 })} />
-        <NumberField label="Max iterations" value={config.scf.maxIterations} min={10} max={1000} step={10} disabled={!editable} onCommit={(value) => update((draft) => { draft.scf.maxIterations = Math.round(value) })} />
+        <NumberField label="Max iterations" value={config.scf.maxIterations} min={1} recommendedMin={10} recommendedMax={1000} step={10} disabled={!editable} onCommit={(value) => update((draft) => { draft.scf.maxIterations = Math.round(value) })} />
         <div className="convergence-row">
           <span>Convergence</span>
           <div className="convergence-lights" aria-label={snapshot?.scf.converged ? 'SCF converged' : 'SCF not converged'}>
@@ -79,7 +78,7 @@ export function Inspector(props: InspectorProps) {
       </InspectorGroup>
 
       <InspectorGroup title="Dynamics">
-        <NumberField label="Time step Δt" value={config.dynamics.timeStep} min={1e-4} max={0.5} step={0.01} unit="au" disabled={!canEditDynamics} onCommit={(value) => update((draft) => { draft.dynamics.timeStep = value })} />
+        <NumberField label="Time step Δt" value={config.dynamics.timeStep} positive recommendedMin={1e-4} recommendedMax={0.5} step={0.01} unit="au" disabled={!canEditDynamics} onCommit={(value) => update((draft) => { draft.dynamics.timeStep = value })} />
         <p className="control-note">Editable while paused. Changing Δt restarts this setup at t = 0.</p>
         <NumberField label="Damping γ" value={config.dynamics.damping} min={0} step={0.01} unit="au⁻¹" disabled={!canEditDynamics} onCommit={(value) => update((draft) => { draft.dynamics.damping = value })} />
         <p className="control-note">0 preserves molecular dynamics; higher values dissipate nuclear motion toward a relaxed structure.</p>
@@ -99,7 +98,7 @@ export function Inspector(props: InspectorProps) {
         </label>
         <p className="control-note">Paces accepted MD steps only; Δt and SCF accuracy stay fixed.</p>
         <ReadoutRow label="Integrator" value={config.dynamics.damping > 0 ? 'Damped Velocity Verlet' : 'Velocity Verlet'} />
-        <NumberField label="Total time" value={config.dynamics.totalTime} min={0.01} max={100000} step={1} unit="au" disabled={!editable} onCommit={(value) => update((draft) => { draft.dynamics.totalTime = value })} />
+        <NumberField label="Total time" value={config.dynamics.totalTime} positive recommendedMin={0.01} recommendedMax={100000} step={1} unit="au" disabled={!editable} onCommit={(value) => update((draft) => { draft.dynamics.totalTime = value })} />
         <ReadoutRow label="Boundary" value="None" />
       </InspectorGroup>
 
@@ -115,7 +114,7 @@ export function Inspector(props: InspectorProps) {
               draft.multiplicity = 1
             }
           })} />
-          <NumberField label="Multiplicity" value={config.multiplicity} min={1} max={25} step={1} disabled={!editable || config.method === 'RHF'} onCommit={(value) => update((draft) => { draft.multiplicity = Math.round(value) })} />
+          <NumberField label="Multiplicity" value={config.multiplicity} min={1} step={1} disabled={!editable || config.method === 'RHF'} onCommit={(value) => update((draft) => { draft.multiplicity = Math.round(value) })} />
           <SelectField label="Backend" value={config.backend} disabled={!editable} options={[["auto", "Auto"], ["wasm", "Portable reference"], ["webgpu", "WebGPU hybrid"]]} onChange={(value) => update((draft) => { draft.backend = value as SimulationConfig['backend'] })} />
           <label className="toggle-row"><span>Spin density</span><input type="checkbox" checked={showSpin} onChange={(event) => onShowSpinChange(event.target.checked)} /></label>
           <p className="backend-note">{capabilities?.reason ?? 'Checking numerical backends…'}</p>
@@ -144,20 +143,26 @@ function ReadoutRow({ label, value, unit }: { label: string; value: string; unit
 }
 
 interface NumberFieldProps {
-  label: string; value: number; min: number; max?: number; step: number; disabled?: boolean; unit?: string; exponential?: boolean; onCommit: (value: number) => void
+  label: string; value: number; min?: number; max?: number; positive?: boolean; recommendedMin?: number; recommendedMax?: number; step: number; disabled?: boolean; unit?: string; exponential?: boolean; onCommit: (value: number) => void
 }
 
-function NumberField({ label, value, min, max, step, disabled, unit, exponential, onCommit }: NumberFieldProps) {
+function NumberField({ label, value, min, max, positive, recommendedMin, recommendedMax, step, disabled, unit, exponential, onCommit }: NumberFieldProps) {
   const formattedValue = exponential ? value.toExponential(1) : String(value)
   const [draft, setDraft] = useState(formattedValue)
+  const warningId = useId()
+  const outsideRecommendation = (recommendedMin !== undefined && value < recommendedMin) || (recommendedMax !== undefined && value > recommendedMax)
   useEffect(() => setDraft(formattedValue), [formattedValue])
   const commit = () => {
     const numeric = Number(draft)
-    if (Number.isFinite(numeric) && numeric >= min && (max === undefined || numeric <= max)) onCommit(numeric)
+    const withinHardBounds = (!positive || numeric > 0) && (min === undefined || numeric >= min) && (max === undefined || numeric <= max)
+    if (Number.isFinite(numeric) && withinHardBounds) onCommit(numeric)
     else setDraft(formattedValue)
   }
   return (
-    <label className="field-row"><span>{label}</span><input type="text" inputMode="decimal" value={draft} disabled={disabled} onChange={(event) => setDraft(event.target.value)} onBlur={commit} onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur() }} />{unit && <small>{unit}</small>}</label>
+    <>
+      <label className="field-row"><span>{label}</span><input type="text" inputMode="decimal" value={draft} disabled={disabled} aria-describedby={outsideRecommendation ? warningId : undefined} onChange={(event) => setDraft(event.target.value)} onBlur={commit} onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur() }} />{unit && <small>{unit}</small>}</label>
+      {outsideRecommendation && <p id={warningId} className="field-warning" role="status"><AlertTriangle aria-hidden="true" /> Outside the recommended {recommendedMin}–{recommendedMax}{unit ? ` ${unit}` : ''} range; results may be unstable.</p>}
+    </>
   )
 }
 
@@ -168,10 +173,10 @@ function SelectField({ label, value, options, disabled, onChange }: { label: str
 function NucleusEditor({ nucleus, onCommit }: { nucleus: Nucleus; onCommit: (field: 'charge' | 'mass' | 'vx' | 'vy', value: number) => void }) {
   return (
     <InspectorGroup title="Selected nucleus">
-      <NumberField label="Charge Z" value={nucleus.charge} min={0.1} max={12} step={0.1} onCommit={(value) => onCommit('charge', value)} />
-      <NumberField label="Mass" value={nucleus.mass} min={0.1} max={100000} step={1} unit="mₑ" onCommit={(value) => onCommit('mass', value)} />
-      <NumberField label="Velocity x" value={nucleus.velocity[0]} min={-10} max={10} step={0.001} onCommit={(value) => onCommit('vx', value)} />
-      <NumberField label="Velocity y" value={nucleus.velocity[1]} min={-10} max={10} step={0.001} onCommit={(value) => onCommit('vy', value)} />
+      <NumberField label="Charge Z" value={nucleus.charge} positive recommendedMin={0.1} recommendedMax={12} step={0.1} onCommit={(value) => onCommit('charge', value)} />
+      <NumberField label="Mass" value={nucleus.mass} positive recommendedMin={0.1} recommendedMax={100000} step={1} unit="mₑ" onCommit={(value) => onCommit('mass', value)} />
+      <NumberField label="Velocity x" value={nucleus.velocity[0]} recommendedMin={-10} recommendedMax={10} step={0.001} onCommit={(value) => onCommit('vx', value)} />
+      <NumberField label="Velocity y" value={nucleus.velocity[1]} recommendedMin={-10} recommendedMax={10} step={0.001} onCommit={(value) => onCommit('vy', value)} />
     </InspectorGroup>
   )
 }

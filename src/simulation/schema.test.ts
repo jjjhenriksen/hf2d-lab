@@ -22,9 +22,12 @@ describe('simulation contract', () => {
     expect(validateConfig(legacy).dynamics.damping).toBe(0)
   })
 
-  it('accepts safe time-step overrides and rejects unsafe values', () => {
+  it('accepts risky finite parameters while rejecting nonphysical values', () => {
     const config = clonePreset('h2')
-    config.dynamics.timeStep = 0.02
+    config.dynamics.timeStep = 2
+    config.softening = 5
+    config.nuclei[0]!.charge = 20
+    config.nuclei[0]!.velocity = [25, -25]
     expect(configSchema.safeParse(config).success).toBe(true)
 
     config.dynamics.timeStep = 0
