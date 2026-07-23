@@ -149,6 +149,7 @@ export function App() {
           snapshot={simulation.snapshot}
           capabilities={simulation.capabilities}
           editable={mode === 'sandbox' && !isRunning && !isBusy}
+          canEditTimeStep={!isRunning && !isBusy}
           selectedNucleusId={selectedNucleusId}
           showSpin={showSpin}
           runSpeed={runSpeed}

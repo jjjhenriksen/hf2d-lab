@@ -16,6 +16,15 @@ describe('simulation contract', () => {
     expect(configSchema.safeParse(clonePreset('collision')).success).toBe(true)
   })
 
+  it('accepts safe time-step overrides and rejects unsafe values', () => {
+    const config = clonePreset('h2')
+    config.dynamics.timeStep = 0.02
+    expect(configSchema.safeParse(config).success).toBe(true)
+
+    config.dynamics.timeStep = 0
+    expect(configSchema.safeParse(config).success).toBe(false)
+  })
+
   it('rejects incompatible multiplicity and out-of-buffer nuclei', () => {
     const spinInvalid = clonePreset('triatomic')
     spinInvalid.multiplicity = 1
