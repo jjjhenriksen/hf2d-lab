@@ -1,6 +1,6 @@
 import { AlertTriangle, ChevronDown, Download, FileUp, Plus, Trash2 } from 'lucide-react'
 import { useEffect, useId, useRef, useState } from 'react'
-import type { BackendCapabilities, Nucleus, SimulationConfig, SimulationSnapshot } from '../simulation/types'
+import type { BackendCapabilities, Nucleus, RunSpeed, SimulationConfig, SimulationSnapshot } from '../simulation/types'
 
 interface InspectorProps {
   config: SimulationConfig
@@ -10,9 +10,9 @@ interface InspectorProps {
   canEditDynamics: boolean
   selectedNucleusId: string | null
   showSpin: boolean
-  runSpeed: number
+  runSpeed: RunSpeed
   onShowSpinChange: (show: boolean) => void
-  onRunSpeedChange: (stepsPerSecond: number) => void
+  onRunSpeedChange: (stepsPerSecond: RunSpeed) => void
   onConfigChange: (config: SimulationConfig) => void
   onSelectNucleus: (id: string | null) => void
   onExport: () => void
@@ -82,21 +82,7 @@ export function Inspector(props: InspectorProps) {
         <p className="control-note">Editable while paused. Changing Δt restarts this setup at t = 0.</p>
         <NumberField label="Damping γ" value={config.dynamics.damping} min={0} step={0.01} unit="au⁻¹" disabled={!canEditDynamics} onCommit={(value) => update((draft) => { draft.dynamics.damping = value })} />
         <p className="control-note">0 preserves molecular dynamics; higher values dissipate nuclear motion toward a relaxed structure.</p>
-        <label className="field-row">
-          <span>Iteration speed</span>
-          <select
-            value={String(runSpeed)}
-            aria-label="Iteration speed in accepted steps per second"
-            onChange={(event) => onRunSpeedChange(Number(event.target.value))}
-          >
-            <option value="0.25">0.25 steps/s</option>
-            <option value="0.5">0.50 steps/s</option>
-            <option value="1">1.00 steps/s</option>
-            <option value="2">2.00 steps/s</option>
-            <option value="4">4.00 steps/s</option>
-          </select>
-        </label>
-        <p className="control-note">Paces accepted MD steps only; Δt and SCF accuracy stay fixed.</p>
+        <RunSpeedField value={runSpeed} onCommit={onRunSpeedChange} />
         <ReadoutRow label="Integrator" value={config.dynamics.damping > 0 ? 'Damped Velocity Verlet' : 'Velocity Verlet'} />
         <NumberField label="Total time" value={config.dynamics.totalTime} positive recommendedMin={0.01} recommendedMax={100000} step={1} unit="au" disabled={!editable} onCommit={(value) => update((draft) => { draft.dynamics.totalTime = value })} />
         <ReadoutRow label="Boundary" value="None" />
@@ -143,13 +129,14 @@ function ReadoutRow({ label, value, unit }: { label: string; value: string; unit
 }
 
 interface NumberFieldProps {
-  label: string; value: number; min?: number; max?: number; positive?: boolean; recommendedMin?: number; recommendedMax?: number; step: number; disabled?: boolean; unit?: string; exponential?: boolean; onCommit: (value: number) => void
+  label: string; value: number; min?: number; max?: number; positive?: boolean; recommendedMin?: number; recommendedMax?: number; step: number; disabled?: boolean; unit?: string; exponential?: boolean; suggestions?: number[]; onCommit: (value: number) => void
 }
 
-function NumberField({ label, value, min, max, positive, recommendedMin, recommendedMax, step, disabled, unit, exponential, onCommit }: NumberFieldProps) {
+function NumberField({ label, value, min, max, positive, recommendedMin, recommendedMax, step, disabled, unit, exponential, suggestions, onCommit }: NumberFieldProps) {
   const formattedValue = exponential ? value.toExponential(1) : String(value)
   const [draft, setDraft] = useState(formattedValue)
   const warningId = useId()
+  const suggestionListId = useId()
   const outsideRecommendation = (recommendedMin !== undefined && value < recommendedMin) || (recommendedMax !== undefined && value > recommendedMax)
   useEffect(() => setDraft(formattedValue), [formattedValue])
   const commit = () => {
@@ -160,8 +147,23 @@ function NumberField({ label, value, min, max, positive, recommendedMin, recomme
   }
   return (
     <>
-      <label className="field-row"><span>{label}</span><input type="text" inputMode="decimal" value={draft} disabled={disabled} aria-describedby={outsideRecommendation ? warningId : undefined} onChange={(event) => setDraft(event.target.value)} onBlur={commit} onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur() }} />{unit && <small>{unit}</small>}</label>
+      <label className="field-row"><span>{label}</span><input type="text" inputMode="decimal" value={draft} disabled={disabled} list={suggestions ? suggestionListId : undefined} aria-describedby={outsideRecommendation ? warningId : undefined} onChange={(event) => setDraft(event.target.value)} onBlur={commit} onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur() }} />{unit && <small>{unit}</small>}</label>
+      {suggestions && <datalist id={suggestionListId}>{suggestions.map((suggestion) => <option key={suggestion} value={suggestion} />)}</datalist>}
       {outsideRecommendation && <p id={warningId} className="field-warning" role="status"><AlertTriangle aria-hidden="true" /> Outside the recommended {recommendedMin}–{recommendedMax}{unit ? ` ${unit}` : ''} range; results may be unstable.</p>}
+    </>
+  )
+}
+
+function RunSpeedField({ value, onCommit }: { value: RunSpeed; onCommit: (value: RunSpeed) => void }) {
+  const lastLimitedValue = useRef(value ?? 1)
+  useEffect(() => {
+    if (value !== null) lastLimitedValue.current = value
+  }, [value])
+  return (
+    <>
+      <NumberField label="Iteration speed" value={value ?? lastLimitedValue.current} positive step={0.25} unit="steps/s" disabled={value === null} suggestions={[0.25, 0.5, 1, 2, 4]} onCommit={onCommit} />
+      <label className="toggle-row"><span>Unlimited speed</span><input type="checkbox" checked={value === null} onChange={(event) => onCommit(event.target.checked ? null : lastLimitedValue.current)} /></label>
+      <p className="control-note">{value === null ? 'Starts each accepted step immediately; Pause remains responsive.' : 'Enter any positive rate; suggested values remain available. Δt and SCF accuracy stay fixed.'}</p>
     </>
   )
 }

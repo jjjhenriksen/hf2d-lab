@@ -1,12 +1,14 @@
-export const MIN_RUN_SPEED = 0.25
-export const MAX_RUN_SPEED = 4
+import type { RunSpeed } from './types'
 
-export function validateRunSpeed(stepsPerSecond: number) {
-  if (!Number.isFinite(stepsPerSecond)) return 1
-  return Math.min(MAX_RUN_SPEED, Math.max(MIN_RUN_SPEED, stepsPerSecond))
+export function validateRunSpeed(stepsPerSecond: RunSpeed): RunSpeed {
+  if (stepsPerSecond === null) return null
+  if (!Number.isFinite(stepsPerSecond) || stepsPerSecond <= 0) return 1
+  return stepsPerSecond
 }
 
-export function pacingDelayMs(stepsPerSecond: number, elapsedMs: number) {
-  const targetInterval = 1000 / validateRunSpeed(stepsPerSecond)
+export function pacingDelayMs(stepsPerSecond: RunSpeed, elapsedMs: number) {
+  const validatedSpeed = validateRunSpeed(stepsPerSecond)
+  if (validatedSpeed === null) return 0
+  const targetInterval = 1000 / validatedSpeed
   return Math.max(0, targetInterval - Math.max(0, elapsedMs))
 }

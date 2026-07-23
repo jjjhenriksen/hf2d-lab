@@ -39,7 +39,7 @@ npm run check
 
 The solver uses a fourth-order finite-difference kinetic operator, exact occupied-orbital exchange convolutions, residual-based orbital optimization with kinetic preconditioning, and a convergence-gated Velocity Verlet step. Unconverged geometries are rejected without advancing time.
 
-The **Iteration speed** control paces accepted molecular-dynamics steps from 0.25 to 4 steps per second. It never changes the physical timestep or relaxes SCF convergence; if a solve takes longer than the requested interval, the next accepted step starts immediately.
+The **Iteration speed** control accepts any positive target rate, with 0.25, 0.5, 1, 2, and 4 steps per second retained as suggestions. **Unlimited speed** removes the artificial pacing delay and starts each accepted step as soon as the worker can proceed. Neither mode changes the physical timestep or relaxes SCF convergence.
 
 The physical **Time step Δt** is editable in both guided experiments and the open sandbox while the simulation is paused. Changing it reinitializes the current setup at `t = 0` so every accepted force evaluation still begins from a converged electronic state.
 

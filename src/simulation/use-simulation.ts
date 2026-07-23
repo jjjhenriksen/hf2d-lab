@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { autosaveSnapshot } from './session'
-import type { BackendCapabilities, SimulationConfig, SimulationSnapshot, WorkerRequest, WorkerResponse } from './types'
+import type { BackendCapabilities, RunSpeed, SimulationConfig, SimulationSnapshot, WorkerRequest, WorkerResponse } from './types'
 
 type WorkerCommand =
   | { type: 'reconfigure'; config: SimulationConfig }
   | { type: 'run' }
-  | { type: 'setSpeed'; stepsPerSecond: number }
+  | { type: 'setSpeed'; stepsPerSecond: RunSpeed }
   | { type: 'pause' }
   | { type: 'step' }
   | { type: 'reset'; config: SimulationConfig }
@@ -61,7 +61,7 @@ export function useSimulation(initialConfig: SimulationConfig) {
     error,
     initialize: useCallback((config: SimulationConfig) => post({ type: 'reconfigure', config }), [post]),
     run: useCallback(() => post({ type: 'run' }), [post]),
-    setSpeed: useCallback((stepsPerSecond: number) => post({ type: 'setSpeed', stepsPerSecond }), [post]),
+    setSpeed: useCallback((stepsPerSecond: RunSpeed) => post({ type: 'setSpeed', stepsPerSecond }), [post]),
     pause: useCallback(() => post({ type: 'pause' }), [post]),
     step: useCallback(() => post({ type: 'step' }), [post]),
     reset: useCallback((config: SimulationConfig) => post({ type: 'reset', config }), [post]),
