@@ -8,7 +8,7 @@ import { TopBar } from './components/TopBar'
 import { cloneAsSandbox, clonePreset } from './simulation/presets'
 import { downloadBlob, exportSession, importSession, restoreAutosave } from './simulation/session'
 import { validateConfig } from './simulation/schema'
-import type { PresetId, SimulationConfig, Vector2 } from './simulation/types'
+import type { PresetId, RunSpeed, SimulationConfig, Vector2 } from './simulation/types'
 import { useSimulation } from './simulation/use-simulation'
 
 export function App() {
@@ -18,7 +18,7 @@ export function App() {
   const [selectedPreset, setSelectedPreset] = useState<PresetId>('h2')
   const [selectedNucleusId, setSelectedNucleusId] = useState<string | null>('h-a')
   const [showSpin, setShowSpin] = useState(false)
-  const [runSpeed, setRunSpeed] = useState(1)
+  const [runSpeed, setRunSpeed] = useState<RunSpeed>(1)
   const [validationError, setValidationError] = useState<string | null>(null)
   const simulation = useSimulation(initialRef.current)
   const { pause, reset, run, step } = simulation
@@ -38,7 +38,7 @@ export function App() {
     }
   }, [simulation.initialize])
 
-  const handleRunSpeedChange = useCallback((stepsPerSecond: number) => {
+  const handleRunSpeedChange = useCallback((stepsPerSecond: RunSpeed) => {
     setRunSpeed(stepsPerSecond)
     simulation.setSpeed(stepsPerSecond)
   }, [simulation.setSpeed])

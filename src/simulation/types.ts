@@ -2,6 +2,7 @@ export type Vector2 = readonly [number, number]
 export type HartreeFockMethod = 'RHF' | 'UHF'
 export type BackendPreference = 'auto' | 'wasm' | 'webgpu'
 export type ActiveBackend = 'wasm' | 'webgpu' | 'typescript'
+export type RunSpeed = number | null
 export type SimulationStatus = 'idle' | 'solving' | 'ready' | 'running' | 'paused' | 'failed'
 
 export interface Nucleus {
@@ -111,7 +112,7 @@ export type WorkerRequest =
   | { id: string; type: 'reconfigure'; config: SimulationConfig }
   | { id: string; type: 'step' }
   | { id: string; type: 'run' }
-  | { id: string; type: 'setSpeed'; stepsPerSecond: number }
+  | { id: string; type: 'setSpeed'; stepsPerSecond: RunSpeed }
   | { id: string; type: 'pause' }
   | { id: string; type: 'reset'; config: SimulationConfig }
   | { id: string; type: 'cancel' }

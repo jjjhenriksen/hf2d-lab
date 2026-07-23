@@ -4,7 +4,7 @@ import { ReferenceHartreeFockEngine } from './reference-engine'
 import { createWasmConvolver, loadWasmKernel } from './wasm-kernel'
 import { WebGpuDensityAccelerator } from './webgpu'
 import { pacingDelayMs, validateRunSpeed } from './pacing'
-import type { ActiveBackend, BackendCapabilities, SimulationSnapshot, WorkerRequest, WorkerResponse } from './types'
+import type { ActiveBackend, BackendCapabilities, RunSpeed, SimulationSnapshot, WorkerRequest, WorkerResponse } from './types'
 
 declare const self: DedicatedWorkerGlobalScope
 
@@ -14,7 +14,7 @@ let activeRequestId = 'worker'
 let accelerator: WebGpuDensityAccelerator | null = null
 let lastSnapshot: SimulationSnapshot | null = null
 let wasmVersion: string | null = null
-let runSpeed = 1
+let runSpeed: RunSpeed = 1
 
 function send(message: WorkerResponse) {
   self.postMessage(message)
