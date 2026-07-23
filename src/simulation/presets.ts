@@ -14,7 +14,7 @@ const common = {
   referenceLength: 1,
   coupling: 1,
   scf: { tolerance: 1e-6, energyTolerance: 1e-8, maxIterations: 200, mixing: 0.16 },
-  dynamics: { timeStep: 0.05, totalTime: 50, integrator: 'velocity-verlet' as const, boundary: 'none' as const },
+  dynamics: { timeStep: 0.05, totalTime: 50, damping: 0, integrator: 'velocity-verlet' as const, boundary: 'none' as const },
   seed: 982451653,
   backend: 'auto' as const,
 }

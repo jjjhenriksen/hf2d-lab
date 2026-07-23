@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { clonePreset } from './presets'
-import { configSchema } from './schema'
+import { configSchema, validateConfig } from './schema'
 import { spinOccupations } from './types'
 
 describe('simulation contract', () => {
@@ -14,6 +14,12 @@ describe('simulation contract', () => {
     expect(configSchema.safeParse(clonePreset('h2')).success).toBe(true)
     expect(configSchema.safeParse(clonePreset('triatomic')).success).toBe(true)
     expect(configSchema.safeParse(clonePreset('collision')).success).toBe(true)
+  })
+
+  it('defaults damping to zero for existing v1 configurations', () => {
+    const legacy = structuredClone(clonePreset('h2')) as unknown as { dynamics: { damping?: number } }
+    delete legacy.dynamics.damping
+    expect(validateConfig(legacy).dynamics.damping).toBe(0)
   })
 
   it('accepts safe time-step overrides and rejects unsafe values', () => {

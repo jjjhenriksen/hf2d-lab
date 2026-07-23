@@ -81,11 +81,15 @@ export class ReferenceHartreeFockEngine {
     const previousBeta = this.orbitalsBeta.map((orbital) => orbital.slice())
     const previousSolve = this.lastSolve
     const dt = this.config.dynamics.timeStep
+    const dampingHalfStep = Math.exp(-0.5 * this.config.dynamics.damping * dt)
     const oldForces = this.forces(previousSolve.density)
 
     this.config.nuclei = this.config.nuclei.map((nucleus, index) => {
       const force = oldForces[index]!
-      const halfVelocity: Vector2 = [nucleus.velocity[0] + 0.5 * dt * force[0] / nucleus.mass, nucleus.velocity[1] + 0.5 * dt * force[1] / nucleus.mass]
+      const halfVelocity: Vector2 = [
+        nucleus.velocity[0] * dampingHalfStep + 0.5 * dt * force[0] / nucleus.mass,
+        nucleus.velocity[1] * dampingHalfStep + 0.5 * dt * force[1] / nucleus.mass,
+      ]
       return {
         ...nucleus,
         velocity: halfVelocity,
@@ -114,8 +118,8 @@ export class ReferenceHartreeFockEngine {
     this.config.nuclei = this.config.nuclei.map((nucleus, index) => ({
       ...nucleus,
       velocity: [
-        nucleus.velocity[0] + 0.5 * dt * newForces[index]![0] / nucleus.mass,
-        nucleus.velocity[1] + 0.5 * dt * newForces[index]![1] / nucleus.mass,
+        (nucleus.velocity[0] + 0.5 * dt * newForces[index]![0] / nucleus.mass) * dampingHalfStep,
+        (nucleus.velocity[1] + 0.5 * dt * newForces[index]![1] / nucleus.mass) * dampingHalfStep,
       ],
     }))
     this.time += dt

@@ -23,6 +23,7 @@ export interface ScfOptions {
 export interface DynamicsOptions {
   timeStep: number
   totalTime: number
+  damping: number
   integrator: 'velocity-verlet'
   boundary: 'none'
 }

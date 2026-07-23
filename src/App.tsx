@@ -149,7 +149,7 @@ export function App() {
           snapshot={simulation.snapshot}
           capabilities={simulation.capabilities}
           editable={mode === 'sandbox' && !isRunning && !isBusy}
-          canEditTimeStep={!isRunning && !isBusy}
+          canEditDynamics={!isRunning && !isBusy}
           selectedNucleusId={selectedNucleusId}
           showSpin={showSpin}
           runSpeed={runSpeed}
@@ -169,7 +169,7 @@ export function App() {
         {(simulation.error || validationError) && <AlertTriangle aria-hidden="true" />}
         <span className="status-time">t = {(simulation.snapshot?.time ?? 0).toFixed(3)} au</span>
         <span className="status-model">Logarithmic 2D potential</span>
-        <span>Born–Oppenheimer dynamics</span>
+        <span>{config.dynamics.damping > 0 ? 'Damped Born–Oppenheimer dynamics' : 'Born–Oppenheimer dynamics'}</span>
         <span className="status-units">Units: a₀ (length) · au (time, energy)</span>
       </footer>
     </div>

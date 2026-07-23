@@ -37,4 +37,18 @@ describe('real-space Hartree–Fock engine', () => {
     expect(stepped.time).toBeCloseTo(config.dynamics.timeStep, 12)
     expect(Math.abs(stepped.energyDrift)).toBeLessThan(1e-6)
   }, 20000)
+
+  it('dissipates nuclear motion when damping is enabled', async () => {
+    const undampedConfig = clonePreset('h2')
+    undampedConfig.scf.tolerance = 1e-5
+    const dampedConfig = structuredClone(undampedConfig)
+    dampedConfig.dynamics.damping = 100
+
+    const undamped = new ReferenceHartreeFockEngine(undampedConfig)
+    const damped = new ReferenceHartreeFockEngine(dampedConfig)
+    await Promise.all([undamped.initialize(), damped.initialize()])
+    const [undampedStep, dampedStep] = await Promise.all([undamped.step(), damped.step()])
+
+    expect(dampedStep.energies.nuclearKinetic).toBeLessThan(undampedStep.energies.nuclearKinetic)
+  }, 20000)
 })
