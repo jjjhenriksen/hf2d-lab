@@ -3,14 +3,18 @@ import type { SimulationSnapshot } from '../simulation/types'
 export function Diagnostics({ snapshot }: { snapshot: SimulationSnapshot | null }) {
   const trajectory = snapshot?.trajectory ?? []
   const history = snapshot?.scf.history ?? []
+  const densityIntegral = snapshot?.scf.densityIntegral
   return (
-    <section className="diagnostics" aria-label="Simulation diagnostics">
+    <section
+      className="diagnostics"
+      aria-label={densityIntegral === undefined ? 'Simulation diagnostics' : `Simulation diagnostics, density integral ${densityIntegral.toFixed(6)} electrons`}
+    >
       <MiniPlot title="Total energy (au)" value={snapshot?.totalEnergy} points={trajectory.map((point) => point.totalEnergy)} color="#64cce9" xLabel="time (au)" />
       <MiniPlot title="SCF residual" value={snapshot?.scf.residual} points={history.map((point) => Math.log10(Math.max(point.residual, 1e-12)))} color="#65d1e7" xLabel="iteration" threshold={-6} />
       <div className="iteration-panel">
         <span>Iteration</span>
         <strong>{snapshot?.scf.iteration ?? 0}</strong>
-        <small>/ {snapshot?.config.scf.maxIterations ?? 200}</small>
+        <small>/ {snapshot?.config.scf.maxIterations ?? 200} · {snapshot?.scf.durationMs !== undefined ? `${snapshot.scf.durationMs.toFixed(0)} ms` : '—'}</small>
         <div className="iteration-rule" />
         <span>SCF status</span>
         <div className="status-lights">{Array.from({ length: 8 }, (_, index) => <i key={index} className={snapshot?.scf.converged ? 'is-on' : index < 3 ? 'is-warm' : ''} />)}</div>
