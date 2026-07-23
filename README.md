@@ -43,6 +43,8 @@ The **Iteration speed** control paces accepted molecular-dynamics steps from 0.2
 
 The physical **Time step Δt** is editable in both guided experiments and the open sandbox while the simulation is paused. Changing it reinitializes the current setup at `t = 0` so every accepted force evaluation still begins from a converged electronic state.
 
+The **Damping γ** control is also editable while paused. `γ = 0` preserves molecular dynamics, while positive values exponentially dissipate nuclear velocities; large values provide a relaxation workflow toward local potential-energy minima without bypassing SCF convergence.
+
 ## Data
 
 Session export produces an `hf2d-session/v1` ZIP containing the configuration, checkpoint metadata, density and orbital buffers, trajectory and convergence CSV files, backend metadata, and a PNG preview. The last stable configuration is autosaved locally in IndexedDB.

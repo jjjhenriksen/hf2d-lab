@@ -34,6 +34,7 @@ export const configSchema: z.ZodType<SimulationConfig> = z.object({
   dynamics: z.object({
     timeStep: finite.min(1e-4).max(0.5),
     totalTime: finite.min(0.01).max(100000),
+    damping: finite.nonnegative(),
     integrator: z.literal('velocity-verlet'),
     boundary: z.literal('none'),
   }),
@@ -56,5 +57,8 @@ export const configSchema: z.ZodType<SimulationConfig> = z.object({
 })
 
 export function validateConfig(input: unknown): SimulationConfig {
-  return configSchema.parse(input)
+  if (!input || typeof input !== 'object') return configSchema.parse(input)
+  const candidate = structuredClone(input) as { dynamics?: { damping?: unknown } }
+  if (candidate.dynamics && candidate.dynamics.damping === undefined) candidate.dynamics.damping = 0
+  return configSchema.parse(candidate)
 }

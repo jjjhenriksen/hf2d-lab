@@ -7,7 +7,7 @@ interface InspectorProps {
   snapshot: SimulationSnapshot | null
   capabilities: BackendCapabilities | null
   editable: boolean
-  canEditTimeStep: boolean
+  canEditDynamics: boolean
   selectedNucleusId: string | null
   showSpin: boolean
   runSpeed: number
@@ -20,7 +20,7 @@ interface InspectorProps {
 }
 
 export function Inspector(props: InspectorProps) {
-  const { config, snapshot, capabilities, editable, canEditTimeStep, selectedNucleusId, showSpin, runSpeed, onShowSpinChange, onRunSpeedChange, onConfigChange, onSelectNucleus, onExport, onImport } = props
+  const { config, snapshot, capabilities, editable, canEditDynamics, selectedNucleusId, showSpin, runSpeed, onShowSpinChange, onRunSpeedChange, onConfigChange, onSelectNucleus, onExport, onImport } = props
   const fileRef = useRef<HTMLInputElement>(null)
   const [advanced, setAdvanced] = useState(false)
   const selected = config.nuclei.find((nucleus) => nucleus.id === selectedNucleusId) ?? null
@@ -79,8 +79,10 @@ export function Inspector(props: InspectorProps) {
       </InspectorGroup>
 
       <InspectorGroup title="Dynamics">
-        <NumberField label="Time step Δt" value={config.dynamics.timeStep} min={1e-4} max={0.5} step={0.01} unit="au" disabled={!canEditTimeStep} onCommit={(value) => update((draft) => { draft.dynamics.timeStep = value })} />
+        <NumberField label="Time step Δt" value={config.dynamics.timeStep} min={1e-4} max={0.5} step={0.01} unit="au" disabled={!canEditDynamics} onCommit={(value) => update((draft) => { draft.dynamics.timeStep = value })} />
         <p className="control-note">Editable while paused. Changing Δt restarts this setup at t = 0.</p>
+        <NumberField label="Damping γ" value={config.dynamics.damping} min={0} step={0.01} unit="au⁻¹" disabled={!canEditDynamics} onCommit={(value) => update((draft) => { draft.dynamics.damping = value })} />
+        <p className="control-note">0 preserves molecular dynamics; higher values dissipate nuclear motion toward a relaxed structure.</p>
         <label className="field-row">
           <span>Iteration speed</span>
           <select
@@ -96,7 +98,7 @@ export function Inspector(props: InspectorProps) {
           </select>
         </label>
         <p className="control-note">Paces accepted MD steps only; Δt and SCF accuracy stay fixed.</p>
-        <ReadoutRow label="Integrator" value="Velocity Verlet" />
+        <ReadoutRow label="Integrator" value={config.dynamics.damping > 0 ? 'Damped Velocity Verlet' : 'Velocity Verlet'} />
         <NumberField label="Total time" value={config.dynamics.totalTime} min={0.01} max={100000} step={1} unit="au" disabled={!editable} onCommit={(value) => update((draft) => { draft.dynamics.totalTime = value })} />
         <ReadoutRow label="Boundary" value="None" />
       </InspectorGroup>
@@ -142,7 +144,7 @@ function ReadoutRow({ label, value, unit }: { label: string; value: string; unit
 }
 
 interface NumberFieldProps {
-  label: string; value: number; min: number; max: number; step: number; disabled?: boolean; unit?: string; exponential?: boolean; onCommit: (value: number) => void
+  label: string; value: number; min: number; max?: number; step: number; disabled?: boolean; unit?: string; exponential?: boolean; onCommit: (value: number) => void
 }
 
 function NumberField({ label, value, min, max, step, disabled, unit, exponential, onCommit }: NumberFieldProps) {
@@ -151,7 +153,7 @@ function NumberField({ label, value, min, max, step, disabled, unit, exponential
   useEffect(() => setDraft(formattedValue), [formattedValue])
   const commit = () => {
     const numeric = Number(draft)
-    if (Number.isFinite(numeric) && numeric >= min && numeric <= max) onCommit(numeric)
+    if (Number.isFinite(numeric) && numeric >= min && (max === undefined || numeric <= max)) onCommit(numeric)
     else setDraft(formattedValue)
   }
   return (
