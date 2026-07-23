@@ -7,6 +7,11 @@ export interface FieldConvolver {
   precondition(field: Float64Array, shift?: number): Float64Array
 }
 
+export interface EngineConvolver {
+  convolve(field: Float64Array): Float64Array | Promise<Float64Array>
+  precondition(field: Float64Array, shift?: number): Float64Array | Promise<Float64Array>
+}
+
 export class OpenBoundaryConvolver {
   readonly fieldSize: number
   readonly paddedSize: number

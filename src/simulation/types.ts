@@ -64,6 +64,8 @@ export interface ScfDiagnostics {
   iteration: number
   residual: number
   energyDelta: number
+  durationMs?: number
+  densityIntegral?: number
   converged: boolean
   history: Array<{ iteration: number; residual: number; energy: number }>
 }
@@ -105,6 +107,7 @@ export interface BackendCapabilities {
   wasm: boolean
   selected: ActiveBackend
   reason: string
+  webgpuAdapter?: string
 }
 
 export type WorkerRequest =

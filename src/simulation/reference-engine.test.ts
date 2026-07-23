@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { OpenBoundaryConvolver } from './fft2d'
 import { clonePreset } from './presets'
 import { ReferenceHartreeFockEngine } from './reference-engine'
 
@@ -10,7 +11,9 @@ describe('real-space Hartree–Fock engine', () => {
     const spacing = 2 * config.domainRadius / config.gridSize
     const integral = snapshot.density.reduce((sum, value) => sum + value * spacing * spacing, 0)
     expect(integral).toBeCloseTo(config.electrons, 4)
+    expect(snapshot.scf.densityIntegral).toBeCloseTo(config.electrons, 8)
     expect(Number.isFinite(snapshot.totalEnergy)).toBe(true)
+    expect(snapshot.scf.durationMs ?? 0).toBeGreaterThan(0)
     expect(snapshot.scf.iteration).toBe(10)
   }, 20000)
 
@@ -73,5 +76,24 @@ describe('real-space Hartree–Fock engine', () => {
     expect(calls).toBe(snapshot.scf.iteration)
     expect(snapshot.backend).toBe('webgpu')
     expect(snapshot.density.every(Number.isFinite)).toBe(true)
+  }, 20000)
+
+  it('accepts an asynchronous convolver without changing reference results', async () => {
+    const config = clonePreset('h2')
+    config.scf.maxIterations = 10
+    const spacing = 2 * config.domainRadius / config.gridSize
+    const reference = new OpenBoundaryConvolver(config.gridSize, spacing, config.softening, config.referenceLength)
+    const asynchronous = {
+      convolve: async (field: Float64Array) => reference.convolve(field),
+      precondition: async (field: Float64Array, shift?: number) => reference.precondition(field, shift),
+    }
+
+    const [synchronousSnapshot, asynchronousSnapshot] = await Promise.all([
+      new ReferenceHartreeFockEngine(config).initialize(),
+      new ReferenceHartreeFockEngine(config, { convolver: asynchronous }).initialize(),
+    ])
+
+    expect(asynchronousSnapshot.totalEnergy).toBeCloseTo(synchronousSnapshot.totalEnergy, 10)
+    expect(asynchronousSnapshot.scf.residual).toBeCloseTo(synchronousSnapshot.scf.residual, 10)
   }, 20000)
 })

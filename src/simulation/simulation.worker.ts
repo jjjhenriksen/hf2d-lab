@@ -45,12 +45,13 @@ async function capabilities(preference: 'auto' | 'wasm' | 'webgpu'): Promise<Bac
     }
   }
   const selected: ActiveBackend = preference === 'webgpu' && webgpu ? 'webgpu' : wasm ? 'wasm' : webgpu ? 'webgpu' : 'typescript'
+  const webgpuAdapter = accelerator?.adapterLabel
   const reason = selected === 'webgpu'
-    ? `WebGPU float32 density acceleration is active${wasm ? ` with Rust/WASM float64 kernel ${wasmVersion}.` : ' with the portable TypeScript kernel.'}`
+    ? `WebGPU float32 density, kinetic, FFT convolution, and preconditioning are active with a 2e-5 SCF residual floor${webgpuAdapter ? ` on ${webgpuAdapter}` : ''}.${wasm ? ` Rust/WASM kernel ${wasmVersion} remains available for the portable reference path.` : ''}`
     : selected === 'wasm'
-      ? `Rust/WASM float64 reference kernel ${wasmVersion} is active.${webgpu && preference === 'auto' ? ' Select WebGPU hybrid to accelerate density evaluation.' : webgpuFailure ? ` ${webgpuFailure}` : ''}`
+      ? `Rust/WASM float64 reference kernel ${wasmVersion} is active.${webgpu && preference === 'auto' ? ' Select WebGPU hybrid to accelerate the dominant SCF operators.' : webgpuFailure ? ` ${webgpuFailure}` : ''}`
       : [wasmFailure, webgpuFailure, 'Portable TypeScript reference path is active.'].filter(Boolean).join(' ')
-  return { webgpu, wasm, selected, reason }
+  return { webgpu, wasm, selected, reason, webgpuAdapter }
 }
 
 async function solveInitial(request: Extract<WorkerRequest, { type: 'initialize' | 'reconfigure' | 'reset' }>) {
@@ -62,14 +63,18 @@ async function solveInitial(request: Extract<WorkerRequest, { type: 'initialize'
   const onProgress = (iteration: number, residual: number) => {
     if (iteration === 1 || iteration % 4 === 0) send({ id: request.id, type: 'progress', iteration, residual, message: 'Optimizing occupied orbitals' })
   }
-  const convolver = caps.wasm ? await createWasmConvolver(config) : undefined
-  const makeConvolver = caps.wasm
+  const convolver = caps.selected === 'webgpu' && accelerator
+    ? await accelerator.createConvolver(config)
+    : caps.wasm
+      ? await createWasmConvolver(config)
+      : undefined
+  const makeConvolver = convolver
     ? (next: typeof config) => {
-        // Reconfiguration creates a new engine below; this synchronous factory is not used for WASM grid changes.
+        // Reconfiguration creates a new engine below; this synchronous factory is not used for grid changes.
         if (next.gridSize !== config.gridSize || next.softening !== config.softening || next.domainRadius !== config.domainRadius || next.referenceLength !== config.referenceLength) {
-          throw new Error('WASM grid changes require a fresh engine initialization.')
+          throw new Error('Grid changes require a fresh engine initialization.')
         }
-        return convolver!
+        return convolver
       }
     : undefined
   engine = new ReferenceHartreeFockEngine(config, {
