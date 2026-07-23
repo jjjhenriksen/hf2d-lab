@@ -51,4 +51,27 @@ describe('real-space Hartree–Fock engine', () => {
 
     expect(dampedStep.energies.nuclearKinetic).toBeLessThan(undampedStep.energies.nuclearKinetic)
   }, 20000)
+
+  it('uses an injected density accelerator for the WebGPU hybrid path', async () => {
+    const config = clonePreset('h2')
+    config.scf.maxIterations = 10
+    let calls = 0
+    const densityAccelerator = {
+      densities: async (alpha: Float64Array[], beta: Float64Array[], points: number) => {
+        calls += 1
+        const density = (orbitals: Float64Array[]) => {
+          const values = new Float64Array(points)
+          for (const orbital of orbitals) for (let index = 0; index < points; index += 1) values[index] = values[index]! + orbital[index]! ** 2
+          return values
+        }
+        return { alpha: density(alpha), beta: density(beta) }
+      },
+    }
+
+    const snapshot = await new ReferenceHartreeFockEngine(config, { backend: 'webgpu', densityAccelerator }).initialize()
+
+    expect(calls).toBe(snapshot.scf.iteration)
+    expect(snapshot.backend).toBe('webgpu')
+    expect(snapshot.density.every(Number.isFinite)).toBe(true)
+  }, 20000)
 })

@@ -35,7 +35,7 @@ npm run check
 
 - The float64 Rust/WASM module performs zero-padded FFT convolution and kinetic preconditioning for the real-space RHF/UHF solver.
 - A TypeScript implementation remains as the portable diagnostic fallback and as a directly testable reference.
-- WebGPU is capability-detected and supplies a float32 density compute kernel. SCF and force acceptance remain on the float64 WASM path so a precision change is never hidden.
+- WebGPU hybrid mode runs the alpha/beta density reduction through a batched float32 compute kernel with reusable GPU buffers. SCF operators and force acceptance remain on the float64 WASM path so a precision change is never hidden; density-only offload is not expected to accelerate every workload.
 
 The solver uses a fourth-order finite-difference kinetic operator, exact occupied-orbital exchange convolutions, residual-based orbital optimization with kinetic preconditioning, and a convergence-gated Velocity Verlet step. Unconverged geometries are rejected without advancing time.
 
