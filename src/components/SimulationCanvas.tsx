@@ -98,11 +98,20 @@ function SelectedReadout({ nucleus }: { nucleus: Nucleus | null }) {
   )
 }
 
-interface PlotBounds { left: number; top: number; right: number; bottom: number }
+export interface PlotBounds { left: number; top: number; right: number; bottom: number }
 
-function plotBounds(width: number, height: number): PlotBounds {
+export function plotBounds(width: number, height: number): PlotBounds {
   const padding = Math.max(42, Math.min(width, height) * 0.075)
-  return { left: padding, top: 20, right: width - 20, bottom: height - padding }
+  const available = { left: padding, top: 20, right: width - 20, bottom: height - padding }
+  const size = Math.min(available.right - available.left, available.bottom - available.top)
+  const horizontalInset = (available.right - available.left - size) / 2
+  const verticalInset = (available.bottom - available.top - size) / 2
+  return {
+    left: available.left + horizontalInset,
+    top: available.top + verticalInset,
+    right: available.right - horizontalInset,
+    bottom: available.bottom - verticalInset,
+  }
 }
 
 function worldToCanvas(position: Vector2, radius: number, plot: PlotBounds): Vector2 {
