@@ -15,6 +15,17 @@ interface SolveResult {
   history: Array<{ iteration: number; residual: number; energy: number }>
 }
 
+export interface DensityAccelerator {
+  densities: (alpha: Float64Array[], beta: Float64Array[], points: number) => Promise<{ alpha: Float64Array; beta: Float64Array }>
+}
+
+interface EngineOptions {
+  convolver?: FieldConvolver
+  makeConvolver?: (config: SimulationConfig) => FieldConvolver
+  backend?: ActiveBackend
+  densityAccelerator?: DensityAccelerator
+}
+
 const copyNuclei = (nuclei: Nucleus[]): Nucleus[] => nuclei.map((nucleus) => ({
   ...nucleus,
   position: [...nucleus.position] as Vector2,
@@ -29,6 +40,7 @@ export class ReferenceHartreeFockEngine {
   private orbitalsBeta: Float64Array[] = []
   private convolver: FieldConvolver
   private readonly makeConvolver: (config: SimulationConfig) => FieldConvolver
+  private readonly densityAccelerator?: DensityAccelerator
   private spacing: number
   private externalPotential: Float64Array
   private initialEnergy = Number.NaN
@@ -38,12 +50,13 @@ export class ReferenceHartreeFockEngine {
   private lastSolve: SolveResult | null = null
   private cancelled = false
 
-  constructor(config: SimulationConfig, options?: { convolver?: FieldConvolver; makeConvolver?: (config: SimulationConfig) => FieldConvolver; backend?: ActiveBackend }) {
+  constructor(config: SimulationConfig, options?: EngineOptions) {
     this.config = structuredClone(config)
     this.backend = options?.backend ?? 'typescript'
     this.spacing = (2 * config.domainRadius) / config.gridSize
     this.makeConvolver = options?.makeConvolver ?? ((next) => new OpenBoundaryConvolver(next.gridSize, 2 * next.domainRadius / next.gridSize, next.softening, next.referenceLength))
     this.convolver = options?.convolver ?? this.makeConvolver(config)
+    this.densityAccelerator = options?.densityAccelerator
     this.externalPotential = this.buildExternalPotential()
     this.initializeOrbitals()
   }
@@ -143,8 +156,9 @@ export class ReferenceHartreeFockEngine {
 
     for (iteration = 1; iteration <= this.config.scf.maxIterations; iteration += 1) {
       if (this.cancelled) throw new Error('Calculation cancelled.')
-      const alphaDensity = this.density(this.orbitalsAlpha)
-      const betaDensity = this.density(this.orbitalsBeta)
+      const accelerated = await this.densityAccelerator?.densities(this.orbitalsAlpha, this.orbitalsBeta, this.config.gridSize ** 2)
+      const alphaDensity = accelerated?.alpha ?? this.density(this.orbitalsAlpha)
+      const betaDensity = accelerated?.beta ?? this.density(this.orbitalsBeta)
       density = addFields(alphaDensity, betaDensity)
       spinDensity = subtractFields(alphaDensity, betaDensity)
       const hartreePotential = this.convolver.convolve(density)

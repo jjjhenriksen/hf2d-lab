@@ -4,7 +4,7 @@ import { ReferenceHartreeFockEngine } from './reference-engine'
 import { createWasmConvolver, loadWasmKernel } from './wasm-kernel'
 import { WebGpuDensityAccelerator } from './webgpu'
 import { pacingDelayMs, validateRunSpeed } from './pacing'
-import type { BackendCapabilities, SimulationSnapshot, WorkerRequest, WorkerResponse } from './types'
+import type { ActiveBackend, BackendCapabilities, SimulationSnapshot, WorkerRequest, WorkerResponse } from './types'
 
 declare const self: DedicatedWorkerGlobalScope
 
@@ -23,29 +23,34 @@ function send(message: WorkerResponse) {
 async function capabilities(preference: 'auto' | 'wasm' | 'webgpu'): Promise<BackendCapabilities> {
   let webgpu = false
   let wasm = false
-  let reason = 'Portable TypeScript reference path is active.'
+  let wasmFailure = ''
+  let webgpuFailure = ''
   try {
     wasmVersion ??= await loadWasmKernel()
     wasm = true
-    reason = `Rust/WASM float64 reference kernel ${wasmVersion} is active.`
   } catch (error) {
-    reason = error instanceof Error ? `WASM unavailable: ${error.message}` : 'WASM initialization failed.'
+    wasmFailure = error instanceof Error ? `WASM unavailable: ${error.message}` : 'WASM initialization failed.'
   }
   if (preference !== 'wasm') {
     try {
       accelerator ??= await WebGpuDensityAccelerator.create()
       webgpu = true
-      reason = `${reason} WebGPU density acceleration is available.`
       accelerator.lost.then((info) => {
         accelerator = null
         isRunning = false
         send({ id: activeRequestId, type: 'error', code: 'WEBGPU_DEVICE_LOST', message: `WebGPU device lost: ${info.message || info.reason}`, recoverable: true })
       }).catch(() => undefined)
     } catch (error) {
-      reason = error instanceof Error ? error.message : 'WebGPU initialization failed.'
+      webgpuFailure = error instanceof Error ? error.message : 'WebGPU initialization failed.'
     }
   }
-  return { webgpu, wasm, selected: wasm ? 'wasm' : 'typescript', reason }
+  const selected: ActiveBackend = preference === 'webgpu' && webgpu ? 'webgpu' : wasm ? 'wasm' : webgpu ? 'webgpu' : 'typescript'
+  const reason = selected === 'webgpu'
+    ? `WebGPU float32 density acceleration is active${wasm ? ` with Rust/WASM float64 kernel ${wasmVersion}.` : ' with the portable TypeScript kernel.'}`
+    : selected === 'wasm'
+      ? `Rust/WASM float64 reference kernel ${wasmVersion} is active.${webgpu && preference === 'auto' ? ' Select WebGPU hybrid to accelerate density evaluation.' : webgpuFailure ? ` ${webgpuFailure}` : ''}`
+      : [wasmFailure, webgpuFailure, 'Portable TypeScript reference path is active.'].filter(Boolean).join(' ')
+  return { webgpu, wasm, selected, reason }
 }
 
 async function solveInitial(request: Extract<WorkerRequest, { type: 'initialize' | 'reconfigure' | 'reset' }>) {
@@ -67,7 +72,12 @@ async function solveInitial(request: Extract<WorkerRequest, { type: 'initialize'
         return convolver!
       }
     : undefined
-  engine = new ReferenceHartreeFockEngine(config, { convolver, makeConvolver, backend: caps.selected })
+  engine = new ReferenceHartreeFockEngine(config, {
+    convolver,
+    makeConvolver,
+    backend: caps.selected,
+    densityAccelerator: caps.selected === 'webgpu' ? accelerator ?? undefined : undefined,
+  })
   const snapshot = await engine.initialize(onProgress)
   sendSnapshot(request.id, snapshot)
 }
