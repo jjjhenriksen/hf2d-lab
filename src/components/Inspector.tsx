@@ -1,5 +1,5 @@
 import { ChevronDown, Download, FileUp, Plus, Trash2 } from 'lucide-react'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { BackendCapabilities, Nucleus, SimulationConfig, SimulationSnapshot } from '../simulation/types'
 
 interface InspectorProps {
@@ -7,6 +7,7 @@ interface InspectorProps {
   snapshot: SimulationSnapshot | null
   capabilities: BackendCapabilities | null
   editable: boolean
+  canEditTimeStep: boolean
   selectedNucleusId: string | null
   showSpin: boolean
   runSpeed: number
@@ -19,7 +20,7 @@ interface InspectorProps {
 }
 
 export function Inspector(props: InspectorProps) {
-  const { config, snapshot, capabilities, editable, selectedNucleusId, showSpin, runSpeed, onShowSpinChange, onRunSpeedChange, onConfigChange, onSelectNucleus, onExport, onImport } = props
+  const { config, snapshot, capabilities, editable, canEditTimeStep, selectedNucleusId, showSpin, runSpeed, onShowSpinChange, onRunSpeedChange, onConfigChange, onSelectNucleus, onExport, onImport } = props
   const fileRef = useRef<HTMLInputElement>(null)
   const [advanced, setAdvanced] = useState(false)
   const selected = config.nuclei.find((nucleus) => nucleus.id === selectedNucleusId) ?? null
@@ -78,7 +79,8 @@ export function Inspector(props: InspectorProps) {
       </InspectorGroup>
 
       <InspectorGroup title="Dynamics">
-        <NumberField label="Time step Δt" value={config.dynamics.timeStep} min={1e-4} max={0.5} step={0.01} unit="au" disabled={!editable} onCommit={(value) => update((draft) => { draft.dynamics.timeStep = value })} />
+        <NumberField label="Time step Δt" value={config.dynamics.timeStep} min={1e-4} max={0.5} step={0.01} unit="au" disabled={!canEditTimeStep} onCommit={(value) => update((draft) => { draft.dynamics.timeStep = value })} />
+        <p className="control-note">Editable while paused. Changing Δt restarts this setup at t = 0.</p>
         <label className="field-row">
           <span>Iteration speed</span>
           <select
@@ -144,11 +146,13 @@ interface NumberFieldProps {
 }
 
 function NumberField({ label, value, min, max, step, disabled, unit, exponential, onCommit }: NumberFieldProps) {
-  const [draft, setDraft] = useState(exponential ? value.toExponential(1) : String(value))
+  const formattedValue = exponential ? value.toExponential(1) : String(value)
+  const [draft, setDraft] = useState(formattedValue)
+  useEffect(() => setDraft(formattedValue), [formattedValue])
   const commit = () => {
     const numeric = Number(draft)
     if (Number.isFinite(numeric) && numeric >= min && numeric <= max) onCommit(numeric)
-    else setDraft(exponential ? value.toExponential(1) : String(value))
+    else setDraft(formattedValue)
   }
   return (
     <label className="field-row"><span>{label}</span><input type="text" inputMode="decimal" value={draft} disabled={disabled} onChange={(event) => setDraft(event.target.value)} onBlur={commit} onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur() }} />{unit && <small>{unit}</small>}</label>
