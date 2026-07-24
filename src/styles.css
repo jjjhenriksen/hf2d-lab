@@ -270,6 +270,7 @@ button:not(:disabled) { cursor: pointer; }
 .convergence-lights i.is-on, .status-lights i.is-on { background: var(--green); box-shadow: 0 0 7px color-mix(in oklch, var(--green) 35%, transparent); }
 .convergence-lights i.is-warm, .status-lights i.is-warm { background: var(--amber); }
 .success-text { color: var(--green) !important; }
+.warning-text { color: var(--amber) !important; }
 .inline-actions, .file-actions { display: flex; gap: 8px; margin-top: 4px; }
 .inline-actions button, .file-actions button { flex: 1; min-height: 34px; padding: 0 9px; font-size: 13px; }
 .inline-actions .danger-action { color: var(--danger); }

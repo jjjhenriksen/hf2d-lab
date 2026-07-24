@@ -8,6 +8,7 @@ interface InspectorProps {
   capabilities: BackendCapabilities | null
   editable: boolean
   canEditDynamics: boolean
+  canEditScfPolicy: boolean
   selectedNucleusId: string | null
   showSpin: boolean
   runSpeed: RunSpeed
@@ -20,7 +21,7 @@ interface InspectorProps {
 }
 
 export function Inspector(props: InspectorProps) {
-  const { config, snapshot, capabilities, editable, canEditDynamics, selectedNucleusId, showSpin, runSpeed, onShowSpinChange, onRunSpeedChange, onConfigChange, onSelectNucleus, onExport, onImport } = props
+  const { config, snapshot, capabilities, editable, canEditDynamics, canEditScfPolicy, selectedNucleusId, showSpin, runSpeed, onShowSpinChange, onRunSpeedChange, onConfigChange, onSelectNucleus, onExport, onImport } = props
   const fileRef = useRef<HTMLInputElement>(null)
   const [advanced, setAdvanced] = useState(false)
   const selected = config.nuclei.find((nucleus) => nucleus.id === selectedNucleusId) ?? null
@@ -68,12 +69,14 @@ export function Inspector(props: InspectorProps) {
         <NumberField label="SCF tolerance" value={config.scf.tolerance} positive recommendedMin={1e-9} recommendedMax={1e-2} step={1e-6} disabled={!editable} exponential onCommit={(value) => update((draft) => { draft.scf.tolerance = value })} />
         <SelectField label="Basis size" value={String(config.gridSize)} disabled={!editable} options={[['64', '64 × 64 grid'], ['128', '128 × 128 grid'], ['256', '256 × 256 experimental']]} onChange={(value) => update((draft) => { draft.gridSize = Number(value) as 64 | 128 | 256 })} />
         <NumberField label="Max iterations" value={config.scf.maxIterations} min={1} recommendedMin={10} recommendedMax={1000} step={10} disabled={!editable} onCommit={(value) => update((draft) => { draft.scf.maxIterations = Math.round(value) })} />
+        <label className="toggle-row"><span>Approximate dynamics</span><input type="checkbox" checked={config.scf.allowUnconvergedDynamics} disabled={!canEditScfPolicy} onChange={(event) => update((draft) => { draft.scf.allowUnconvergedDynamics = event.target.checked })} /></label>
+        <p className="control-note">Off by default. When enabled, a failed solve continues from its lowest-energy finite iteration and remains marked unconverged.</p>
         <div className="convergence-row">
           <span>Convergence</span>
           <div className="convergence-lights" aria-label={snapshot?.scf.converged ? 'SCF converged' : 'SCF not converged'}>
             {Array.from({ length: 6 }, (_, index) => <i key={index} className={snapshot?.scf.converged ? 'is-on' : index < Math.min(5, Math.ceil((snapshot?.scf.iteration ?? 0) / 10)) ? 'is-warm' : ''} />)}
           </div>
-          <strong className={snapshot?.scf.converged ? 'success-text' : ''}>{snapshot?.scf.converged ? 'converged' : 'pending'}</strong>
+          <strong className={snapshot?.scf.converged ? 'success-text' : snapshot?.scf.usedBestIteration ? 'warning-text' : ''}>{snapshot?.scf.converged ? 'converged' : snapshot?.scf.usedBestIteration ? `best #${snapshot.scf.bestIteration}` : 'pending'}</strong>
         </div>
       </InspectorGroup>
 

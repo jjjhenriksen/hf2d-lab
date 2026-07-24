@@ -19,6 +19,7 @@ export interface ScfOptions {
   energyTolerance: number
   maxIterations: number
   mixing: number
+  allowUnconvergedDynamics: boolean
 }
 
 export interface DynamicsOptions {
@@ -62,6 +63,8 @@ export interface EnergyComponents {
 
 export interface ScfDiagnostics {
   iteration: number
+  bestIteration?: number
+  usedBestIteration?: boolean
   residual: number
   energyDelta: number
   durationMs?: number

@@ -16,10 +16,12 @@ describe('simulation contract', () => {
     expect(configSchema.safeParse(clonePreset('collision')).success).toBe(true)
   })
 
-  it('defaults damping to zero for existing v1 configurations', () => {
-    const legacy = structuredClone(clonePreset('h2')) as unknown as { dynamics: { damping?: number } }
+  it('defaults new options for existing v1 configurations', () => {
+    const legacy = structuredClone(clonePreset('h2')) as unknown as { dynamics: { damping?: number }; scf: { allowUnconvergedDynamics?: boolean } }
     delete legacy.dynamics.damping
+    delete legacy.scf.allowUnconvergedDynamics
     expect(validateConfig(legacy).dynamics.damping).toBe(0)
+    expect(validateConfig(legacy).scf.allowUnconvergedDynamics).toBe(false)
   })
 
   it('accepts risky finite parameters while rejecting nonphysical values', () => {
