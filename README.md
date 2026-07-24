@@ -49,6 +49,8 @@ Backend comparisons must keep the total-energy difference within `5e-5` au, the 
 
 The **Iteration speed** control accepts any positive target rate, with 0.25, 0.5, 1, 2, and 4 steps per second retained as suggestions. **Unlimited speed** removes the artificial pacing delay and starts each accepted step as soon as the worker can proceed. Neither mode changes the physical timestep or relaxes SCF convergence.
 
+Parameter edits are staged locally instead of starting a solve immediately. The canvas and diagnostics show a pending state until **Solve SCF** applies the complete edited configuration; Run and Step remain disabled while the electronic state is stale.
+
 The physical **Time step Δt** is editable in both guided experiments and the open sandbox while the simulation is paused. Changing it reinitializes the current setup at `t = 0` so every accepted force evaluation still begins from a converged electronic state.
 
 The **Damping γ** control is also editable while paused. `γ = 0` preserves molecular dynamics, while positive values exponentially dissipate nuclear velocities; large values provide a relaxation workflow toward local potential-energy minima without bypassing SCF convergence.
