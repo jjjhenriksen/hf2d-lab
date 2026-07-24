@@ -41,6 +41,8 @@ The solver uses a fourth-order finite-difference kinetic operator, exact occupie
 
 If an SCF solve reaches its iteration limit, the engine restores the finite iteration with the lowest electronic energy. Dynamics still requires convergence by default; **Approximate dynamics** is an explicit opt-in that permits steps from the retained iterate while keeping the result visibly marked unconverged.
 
+The sandbox’s **Real-space grid** controls set the square integration grid and symmetric limits `[-L, L]²`; the inspector reports the derived spacing `Δx = 2L / N`. Orbitals are represented directly at those grid points, so “basis size” does not refer to a separate Gaussian or atom-centered basis family in this model.
+
 ### WebGPU validation
 
 Performance comparisons use the H₂ analogue in Chrome, discard the first solve after changing a backend or grid, and report the median of five worker-reported SCF durations. The 128² fixture runs to convergence with the default 200-iteration cap. Because the current 256² fixture does not converge on either backend within that cap, its throughput comparison uses exactly 20 iterations and requires both paths to report the same nonconverged state.
