@@ -14,6 +14,9 @@ interface SolveResult {
   residual: number
   durationMs: number
   iteration: number
+  bestIteration: number
+  usedBestIteration: boolean
+  energyDelta: number
   converged: boolean
   history: Array<{ iteration: number; residual: number; energy: number }>
 }
@@ -80,7 +83,16 @@ export class ReferenceHartreeFockEngine {
     this.lastSolve = result
     this.initialEnergy = result.totalEnergy
     this.trajectory = [this.trajectoryPoint(result)]
-    return this.snapshot(result, result.converged ? 'ready' : 'failed', result.converged ? 'SCF converged' : 'SCF did not converge')
+    const canUseApproximate = this.config.scf.allowUnconvergedDynamics && result.usedBestIteration
+    return this.snapshot(
+      result,
+      result.converged || canUseApproximate ? 'ready' : 'failed',
+      result.converged
+        ? 'SCF converged'
+        : canUseApproximate
+          ? `SCF did not converge; using lowest-energy iteration ${result.bestIteration} with approximate dynamics enabled`
+          : `SCF did not converge; retained lowest-energy iteration ${result.bestIteration}`,
+    )
   }
 
   async reconfigure(config: SimulationConfig, progress?: ProgressCallback) {
@@ -97,7 +109,9 @@ export class ReferenceHartreeFockEngine {
   }
 
   async step(progress?: ProgressCallback) {
-    if (!this.lastSolve?.converged) throw new Error('A converged SCF state is required before a dynamics step.')
+    if (!this.lastSolve?.converged && !(this.config.scf.allowUnconvergedDynamics && this.lastSolve?.usedBestIteration)) {
+      throw new Error('A converged SCF state is required before a dynamics step. Enable approximate dynamics to use the retained lowest-energy iterate.')
+    }
     const previousNuclei = copyNuclei(this.config.nuclei)
     const previousAlpha = this.orbitalsAlpha.map((orbital) => orbital.slice())
     const previousBeta = this.orbitalsBeta.map((orbital) => orbital.slice())
@@ -127,7 +141,8 @@ export class ReferenceHartreeFockEngine {
 
     this.externalPotential = this.buildExternalPotential()
     const result = await this.solve(progress)
-    if (!result.converged) {
+    const canUseApproximate = this.config.scf.allowUnconvergedDynamics && result.usedBestIteration
+    if (!result.converged && !canUseApproximate) {
       this.config.nuclei = previousNuclei
       this.orbitalsAlpha = previousAlpha
       this.orbitalsBeta = previousBeta
@@ -149,7 +164,13 @@ export class ReferenceHartreeFockEngine {
     this.lastSolve = result
     this.trajectory.push(this.trajectoryPoint(result))
     if (this.trajectory.length > 600) this.trajectory.shift()
-    return this.snapshot(result, 'paused', 'Accepted converged Born–Oppenheimer step')
+    return this.snapshot(
+      result,
+      'paused',
+      result.converged
+        ? 'Accepted converged Born–Oppenheimer step'
+        : `Accepted approximate step from lowest-energy SCF iteration ${result.bestIteration}`,
+    )
   }
 
   private async solve(progress?: ProgressCallback): Promise<SolveResult> {
@@ -162,6 +183,17 @@ export class ReferenceHartreeFockEngine {
     let spinDensity = density.slice()
     let converged = false
     let iteration = 0
+    let best: {
+      energy: number
+      iteration: number
+      residual: number
+      energyDelta: number
+      density: Float64Array
+      spinDensity: Float64Array
+      components: EnergyComponents
+      orbitalsAlpha: Float64Array[]
+      orbitalsBeta: Float64Array[]
+    } | null = null
     const effectiveTolerance = this.backend === 'webgpu'
       ? Math.max(this.config.scf.tolerance, WEBGPU_RESIDUAL_FLOOR)
       : this.config.scf.tolerance
@@ -207,6 +239,20 @@ export class ReferenceHartreeFockEngine {
       if (history.length > 240) history.shift()
       progress?.(iteration, residual, electronic)
 
+      if (Number.isFinite(electronic) && Number.isFinite(residual) && (!best || electronic < best.energy)) {
+        best = {
+          energy: electronic,
+          iteration,
+          residual,
+          energyDelta: Number.isFinite(energyDelta) ? energyDelta : 0,
+          density: density.slice(),
+          spinDensity: spinDensity.slice(),
+          components: { ...components },
+          orbitalsAlpha: this.orbitalsAlpha.map((orbital) => orbital.slice()),
+          orbitalsBeta: this.orbitalsBeta.map((orbital) => orbital.slice()),
+        }
+      }
+
       if (residual <= effectiveTolerance && energyDelta <= Math.max(this.config.scf.energyTolerance, 1e-7)) {
         converged = true
         break
@@ -224,9 +270,31 @@ export class ReferenceHartreeFockEngine {
     }
 
     iteration = Math.min(iteration, this.config.scf.maxIterations)
+    const usedBestIteration = !converged && best !== null
+    if (usedBestIteration && best) {
+      density = best.density
+      spinDensity = best.spinDensity
+      components = best.components
+      residual = best.residual
+      this.orbitalsAlpha = best.orbitalsAlpha
+      this.orbitalsBeta = best.orbitalsBeta
+    }
     components.nuclearKinetic = this.nuclearKineticEnergy()
     const totalEnergy = Object.values(components).reduce((sum, value) => sum + value, 0)
-    return { density, spinDensity, energies: components, totalEnergy, residual, durationMs: performance.now() - startedAt, iteration, converged, history }
+    return {
+      density,
+      spinDensity,
+      energies: components,
+      totalEnergy,
+      residual,
+      durationMs: performance.now() - startedAt,
+      iteration,
+      bestIteration: best?.iteration ?? iteration,
+      usedBestIteration,
+      energyDelta: usedBestIteration && best ? best.energyDelta : history.length > 1 ? Math.abs(history.at(-1)!.energy - history.at(-2)!.energy) : 0,
+      converged,
+      history,
+    }
   }
 
   private initializeOrbitals() {
@@ -411,10 +479,12 @@ export class ReferenceHartreeFockEngine {
       energyDrift: point.energyDrift,
       scf: {
         iteration: result.iteration,
+        bestIteration: result.bestIteration,
+        usedBestIteration: result.usedBestIteration,
         residual: result.residual,
         durationMs: result.durationMs,
         densityIntegral: result.density.reduce((sum, value) => sum + value * this.spacing * this.spacing, 0),
-        energyDelta: result.history.length > 1 ? Math.abs(result.history.at(-1)!.energy - result.history.at(-2)!.energy) : 0,
+        energyDelta: result.energyDelta,
         converged: result.converged,
         history: result.history,
       },

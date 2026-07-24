@@ -30,6 +30,7 @@ export const configSchema: z.ZodType<SimulationConfig> = z.object({
     energyTolerance: finite.positive(),
     maxIterations: z.number().int().positive(),
     mixing: finite.positive(),
+    allowUnconvergedDynamics: z.boolean(),
   }),
   dynamics: z.object({
     timeStep: finite.positive(),
@@ -58,7 +59,8 @@ export const configSchema: z.ZodType<SimulationConfig> = z.object({
 
 export function validateConfig(input: unknown): SimulationConfig {
   if (!input || typeof input !== 'object') return configSchema.parse(input)
-  const candidate = structuredClone(input) as { dynamics?: { damping?: unknown } }
+  const candidate = structuredClone(input) as { dynamics?: { damping?: unknown }; scf?: { allowUnconvergedDynamics?: unknown } }
   if (candidate.dynamics && candidate.dynamics.damping === undefined) candidate.dynamics.damping = 0
+  if (candidate.scf && candidate.scf.allowUnconvergedDynamics === undefined) candidate.scf.allowUnconvergedDynamics = false
   return configSchema.parse(candidate)
 }

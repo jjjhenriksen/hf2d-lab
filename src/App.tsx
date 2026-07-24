@@ -24,7 +24,10 @@ export function App() {
   const { pause, reset, run, step } = simulation
   const isRunning = simulation.snapshot?.status === 'running'
   const isBusy = Boolean(simulation.progress)
-  const canRun = Boolean(simulation.snapshot?.scf.converged) && !simulation.error && !validationError
+  const canRun = Boolean(
+    simulation.snapshot?.scf.converged
+    || (config.scf.allowUnconvergedDynamics && simulation.snapshot?.scf.usedBestIteration),
+  ) && !simulation.error && !validationError
 
   const applyConfig = useCallback((next: SimulationConfig) => {
     try {
@@ -150,6 +153,7 @@ export function App() {
           capabilities={simulation.capabilities}
           editable={mode === 'sandbox' && !isRunning && !isBusy}
           canEditDynamics={!isRunning && !isBusy}
+          canEditScfPolicy={!isRunning && !isBusy}
           selectedNucleusId={selectedNucleusId}
           showSpin={showSpin}
           runSpeed={runSpeed}

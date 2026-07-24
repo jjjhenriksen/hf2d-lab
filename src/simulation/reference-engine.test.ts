@@ -96,4 +96,48 @@ describe('real-space Hartree–Fock engine', () => {
     expect(asynchronousSnapshot.totalEnergy).toBeCloseTo(synchronousSnapshot.totalEnergy, 10)
     expect(asynchronousSnapshot.scf.residual).toBeCloseTo(synchronousSnapshot.scf.residual, 10)
   }, 20000)
+
+  it('restores the lowest-energy iterate after a nonconverged solve', async () => {
+    const config = clonePreset('h2')
+    config.scf.maxIterations = 4
+    config.scf.tolerance = 1e-20
+    config.scf.energyTolerance = 1e-20
+
+    const snapshot = await new ReferenceHartreeFockEngine(config).initialize()
+    const best = snapshot.scf.history.reduce((lowest, entry) => entry.energy < lowest.energy ? entry : lowest)
+    const retainedElectronicEnergy = snapshot.energies.kinetic
+      + snapshot.energies.electronNuclear
+      + snapshot.energies.hartree
+      + snapshot.energies.exchange
+      + snapshot.energies.nuclear
+
+    expect(snapshot.scf.converged).toBe(false)
+    expect(snapshot.scf.usedBestIteration).toBe(true)
+    expect(snapshot.scf.bestIteration).toBe(best.iteration)
+    expect(retainedElectronicEnergy).toBeCloseTo(best.energy, 10)
+    expect(snapshot.message).toContain(`retained lowest-energy iteration ${best.iteration}`)
+  }, 20000)
+
+  it('requires an explicit opt-in before stepping from the retained iterate', async () => {
+    const strictConfig = clonePreset('h2')
+    strictConfig.scf.maxIterations = 4
+    strictConfig.scf.tolerance = 1e-20
+    strictConfig.scf.energyTolerance = 1e-20
+    const strictEngine = new ReferenceHartreeFockEngine(strictConfig)
+    await strictEngine.initialize()
+    await expect(strictEngine.step()).rejects.toThrow('Enable approximate dynamics')
+
+    const approximateConfig = structuredClone(strictConfig)
+    approximateConfig.scf.allowUnconvergedDynamics = true
+    const approximateEngine = new ReferenceHartreeFockEngine(approximateConfig)
+    const initial = await approximateEngine.initialize()
+    const stepped = await approximateEngine.step()
+
+    expect(initial.status).toBe('ready')
+    expect(initial.scf.converged).toBe(false)
+    expect(stepped.status).toBe('paused')
+    expect(stepped.scf.usedBestIteration).toBe(true)
+    expect(stepped.time).toBeCloseTo(approximateConfig.dynamics.timeStep, 12)
+    expect(stepped.message).toContain('Accepted approximate step')
+  }, 20000)
 })

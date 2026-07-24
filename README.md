@@ -39,6 +39,8 @@ npm run check
 
 The solver uses a fourth-order finite-difference kinetic operator, exact occupied-orbital exchange convolutions, residual-based orbital optimization with kinetic preconditioning, and a convergence-gated Velocity Verlet step. Unconverged geometries are rejected without advancing time.
 
+If an SCF solve reaches its iteration limit, the engine restores the finite iteration with the lowest electronic energy. Dynamics still requires convergence by default; **Approximate dynamics** is an explicit opt-in that permits steps from the retained iterate while keeping the result visibly marked unconverged.
+
 ### WebGPU validation
 
 Performance comparisons use the H₂ analogue in Chrome, discard the first solve after changing a backend or grid, and report the median of five worker-reported SCF durations. The 128² fixture runs to convergence with the default 200-iteration cap. Because the current 256² fixture does not converge on either backend within that cap, its throughput comparison uses exactly 20 iterations and requires both paths to report the same nonconverged state.
