@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { fieldViewOptions, resolveFieldView, type FieldViewId } from '../simulation/field-views'
 import type { Nucleus, SimulationConfig, SimulationSnapshot, Vector2 } from '../simulation/types'
 
 interface SimulationCanvasProps {
@@ -6,27 +7,30 @@ interface SimulationCanvasProps {
   snapshot: SimulationSnapshot | null
   selectedNucleusId: string | null
   editable: boolean
-  showSpin: boolean
+  fieldView: FieldViewId
   onSelectNucleus: (id: string | null) => void
   onMoveNucleus: (id: string, position: Vector2) => void
 }
 
-export function SimulationCanvas({ config, snapshot, selectedNucleusId, editable, showSpin, onSelectNucleus, onMoveNucleus }: SimulationCanvasProps) {
+export function SimulationCanvas({ config, snapshot, selectedNucleusId, editable, fieldView, onSelectNucleus, onMoveNucleus }: SimulationCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [dragging, setDragging] = useState<string | null>(null)
   const nuclei = snapshot?.nuclei ?? config.nuclei
-  const field = useMemo(() => snapshot ? (showSpin ? snapshot.spinDensity : snapshot.density) : initialGuessDensity(config), [snapshot, showSpin, config])
-  const emptyContour = useMemo(() => new Float32Array(config.gridSize ** 2), [config.gridSize])
-  const contour = snapshot?.orbitalContours ?? emptyContour
+  const resolvedView = useMemo(() => snapshot ? resolveFieldView(snapshot, fieldView) : null, [snapshot, fieldView])
+  const emptyField = useMemo(() => new Float32Array(config.gridSize ** 2), [config.gridSize])
+  const field = resolvedView?.field ?? (fieldView === 'density' ? initialGuessDensity(config) : emptyField)
+  const contour = resolvedView?.contour ?? emptyField
+  const signed = resolvedView?.signed ?? fieldView !== 'density'
+  const fieldLabel = resolvedView?.label ?? fieldViewOptions(config).find(({ id }) => id === fieldView)?.label ?? 'Electron density'
 
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
-    const observer = new ResizeObserver(() => drawScene(canvas, config, nuclei, field, contour, snapshot?.trajectory ?? [], selectedNucleusId, showSpin))
+    const observer = new ResizeObserver(() => drawScene(canvas, config, nuclei, field, contour, snapshot?.trajectory ?? [], selectedNucleusId, signed))
     observer.observe(canvas)
-    drawScene(canvas, config, nuclei, field, contour, snapshot?.trajectory ?? [], selectedNucleusId, showSpin)
+    drawScene(canvas, config, nuclei, field, contour, snapshot?.trajectory ?? [], selectedNucleusId, signed)
     return () => observer.disconnect()
-  }, [config, nuclei, field, contour, snapshot?.trajectory, selectedNucleusId, showSpin])
+  }, [config, nuclei, field, contour, snapshot?.trajectory, selectedNucleusId, signed])
 
   const positionFromEvent = (event: React.PointerEvent<HTMLCanvasElement>): Vector2 => {
     const rect = event.currentTarget.getBoundingClientRect()
@@ -56,7 +60,7 @@ export function SimulationCanvas({ config, snapshot, selectedNucleusId, editable
         id="simulation-canvas"
         ref={canvasRef}
         tabIndex={0}
-        aria-label="Electron density field with nuclei and trajectories. Select a nucleus to inspect it."
+        aria-label={`${fieldLabel} field with nuclei and trajectories. Select a nucleus to inspect it.`}
         onPointerDown={(event) => {
           const hit = hitNucleus(event)
           onSelectNucleus(hit?.id ?? null)
@@ -67,7 +71,7 @@ export function SimulationCanvas({ config, snapshot, selectedNucleusId, editable
         }}
         onPointerMove={(event) => {
           if (!dragging || !editable) return
-          drawScene(event.currentTarget, config, nuclei.map((nucleus) => nucleus.id === dragging ? { ...nucleus, position: positionFromEvent(event) } : nucleus), field, contour, snapshot?.trajectory ?? [], dragging, showSpin)
+          drawScene(event.currentTarget, config, nuclei.map((nucleus) => nucleus.id === dragging ? { ...nucleus, position: positionFromEvent(event) } : nucleus), field, contour, snapshot?.trajectory ?? [], dragging, signed)
         }}
         onPointerUp={(event) => {
           if (dragging && editable) onMoveNucleus(dragging, positionFromEvent(event))
@@ -76,7 +80,7 @@ export function SimulationCanvas({ config, snapshot, selectedNucleusId, editable
         }}
       />
       <div className="canvas-legend" aria-label="Canvas legend">
-        <span><i className={showSpin ? 'legend-spin' : 'legend-density'} />{showSpin ? 'spin density' : 'electron density'}</span>
+        <span><i className={signed ? 'legend-signed' : 'legend-density'} />{fieldLabel}</span>
         <span><i className="legend-nucleus" />nuclei</span>
         <span><i className="legend-trajectory" />trajectory</span>
       </div>
@@ -121,7 +125,7 @@ function worldToCanvas(position: Vector2, radius: number, plot: PlotBounds): Vec
   ]
 }
 
-function drawScene(canvas: HTMLCanvasElement, config: SimulationConfig, nuclei: Nucleus[], field: Float32Array, contour: Float32Array, trajectory: SimulationSnapshot['trajectory'], selected: string | null, showSpin: boolean) {
+function drawScene(canvas: HTMLCanvasElement, config: SimulationConfig, nuclei: Nucleus[], field: Float32Array, contour: Float32Array, trajectory: SimulationSnapshot['trajectory'], selected: string | null, signed: boolean) {
   const rect = canvas.getBoundingClientRect()
   const dpr = Math.min(window.devicePixelRatio || 1, 2)
   const width = Math.max(320, Math.round(rect.width))
@@ -136,14 +140,14 @@ function drawScene(canvas: HTMLCanvasElement, config: SimulationConfig, nuclei: 
   ctx.fillStyle = '#061019'
   ctx.fillRect(0, 0, width, height)
   const plot = plotBounds(width, height)
-  drawDensity(ctx, field, config.gridSize, plot, showSpin)
+  drawField(ctx, field, config.gridSize, plot, signed)
   drawContours(ctx, contour, config.gridSize, plot)
   drawAxes(ctx, config.domainRadius, plot)
   drawTrajectories(ctx, trajectory, config.domainRadius, plot, nuclei.length)
   for (const nucleus of nuclei) drawNucleus(ctx, nucleus, config.domainRadius, plot, nucleus.id === selected)
 }
 
-function drawDensity(ctx: CanvasRenderingContext2D, field: Float32Array, n: number, plot: PlotBounds, showSpin: boolean) {
+function drawField(ctx: CanvasRenderingContext2D, field: Float32Array, n: number, plot: PlotBounds, signed: boolean) {
   const offscreen = document.createElement('canvas')
   offscreen.width = n
   offscreen.height = n
@@ -157,14 +161,14 @@ function drawDensity(ctx: CanvasRenderingContext2D, field: Float32Array, n: numb
       const value = field[sourceIndex]! / max
       const magnitude = Math.min(1, Math.sqrt(Math.abs(value)))
       const target = 4 * (y * n + x)
-      if (showSpin && value < 0) {
+      if (signed && value < 0) {
         image.data[target] = 156 * magnitude
         image.data[target + 1] = 54 * magnitude
         image.data[target + 2] = 58 * magnitude
       } else {
-        image.data[target] = (showSpin ? 225 : 22) * magnitude
-        image.data[target + 1] = (showSpin ? 160 : 174) * magnitude
-        image.data[target + 2] = (showSpin ? 51 : 228) * magnitude
+        image.data[target] = (signed ? 225 : 22) * magnitude
+        image.data[target + 1] = (signed ? 160 : 174) * magnitude
+        image.data[target + 2] = (signed ? 51 : 228) * magnitude
       }
       image.data[target + 3] = Math.min(225, 25 + 230 * magnitude)
     }

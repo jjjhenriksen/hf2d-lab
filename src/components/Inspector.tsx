@@ -1,6 +1,7 @@
 import { AlertTriangle, ChevronDown, Download, FileUp, Plus, Trash2 } from 'lucide-react'
 import { useEffect, useId, useRef, useState } from 'react'
 import { gridSpacing, integrationLimits } from '../simulation/discretization'
+import { fieldViewOptions, type FieldViewId } from '../simulation/field-views'
 import type { BackendCapabilities, Nucleus, RunSpeed, ScfAcceleration, SimulationConfig, SimulationSnapshot } from '../simulation/types'
 
 interface InspectorProps {
@@ -11,9 +12,9 @@ interface InspectorProps {
   canEditDynamics: boolean
   canEditScfPolicy: boolean
   selectedNucleusId: string | null
-  showSpin: boolean
+  fieldView: FieldViewId
   runSpeed: RunSpeed
-  onShowSpinChange: (show: boolean) => void
+  onFieldViewChange: (view: FieldViewId) => void
   onRunSpeedChange: (stepsPerSecond: RunSpeed) => void
   onConfigChange: (config: SimulationConfig) => void
   onSelectNucleus: (id: string | null) => void
@@ -22,11 +23,13 @@ interface InspectorProps {
 }
 
 export function Inspector(props: InspectorProps) {
-  const { config, snapshot, capabilities, editable, canEditDynamics, canEditScfPolicy, selectedNucleusId, showSpin, runSpeed, onShowSpinChange, onRunSpeedChange, onConfigChange, onSelectNucleus, onExport, onImport } = props
+  const { config, snapshot, capabilities, editable, canEditDynamics, canEditScfPolicy, selectedNucleusId, fieldView, runSpeed, onFieldViewChange, onRunSpeedChange, onConfigChange, onSelectNucleus, onExport, onImport } = props
   const fileRef = useRef<HTMLInputElement>(null)
   const [advanced, setAdvanced] = useState(false)
   const selected = config.nuclei.find((nucleus) => nucleus.id === selectedNucleusId) ?? null
   const [lowerLimit, upperLimit] = integrationLimits(config.domainRadius)
+  const viewOptions = fieldViewOptions(config)
+  const selectedFieldView = viewOptions.some(({ id }) => id === fieldView) ? fieldView : 'density'
   const update = (recipe: (draft: SimulationConfig) => void) => {
     const next = structuredClone(config)
     recipe(next)
@@ -75,6 +78,11 @@ export function Inspector(props: InspectorProps) {
         <p className="control-note">Orbitals are represented directly at these real-space grid points; this model does not use a separate atom-centered basis-set family.</p>
       </InspectorGroup>
 
+      <InspectorGroup title="View">
+        <SelectField label="Field" value={selectedFieldView} options={viewOptions.map(({ id, label }) => [id, label])} onChange={(value) => onFieldViewChange(value as FieldViewId)} />
+        <p className="control-note">Orbital views show signed amplitude; RHF lists paired spatial orbitals once, while UHF lists each occupied spin-orbital.</p>
+      </InspectorGroup>
+
       <InspectorGroup title="SCF">
         <NumberField label="SCF tolerance" value={config.scf.tolerance} positive recommendedMin={1e-9} recommendedMax={1e-2} step={1e-6} disabled={!editable} exponential onCommit={(value) => update((draft) => { draft.scf.tolerance = value })} />
         <NumberField label="Max iterations" value={config.scf.maxIterations} min={1} recommendedMin={10} recommendedMax={1000} step={10} disabled={!editable} onCommit={(value) => update((draft) => { draft.scf.maxIterations = Math.round(value) })} />
@@ -118,7 +126,6 @@ export function Inspector(props: InspectorProps) {
           })} />
           <NumberField label="Multiplicity" value={config.multiplicity} min={1} step={1} disabled={!editable || config.method === 'RHF'} onCommit={(value) => update((draft) => { draft.multiplicity = Math.round(value) })} />
           <SelectField label="Backend" value={config.backend} disabled={!editable} options={[["auto", "Auto"], ["wasm", "Portable reference"], ["webgpu", "WebGPU hybrid"]]} onChange={(value) => update((draft) => { draft.backend = value as SimulationConfig['backend'] })} />
-          <label className="toggle-row"><span>Spin density</span><input type="checkbox" checked={showSpin} onChange={(event) => onShowSpinChange(event.target.checked)} /></label>
           <p className="backend-note">{capabilities?.reason ?? 'Checking numerical backends…'}</p>
           <div className="file-actions">
             <button onClick={onExport}><Download aria-hidden="true" /> Export session</button>
