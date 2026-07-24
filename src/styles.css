@@ -196,8 +196,8 @@ button:not(:disabled) { cursor: pointer; }
 }
 .canvas-legend span { display: flex; align-items: center; gap: 10px; }
 .canvas-legend i { display: inline-block; flex: 0 0 auto; }
-.legend-density, .legend-spin { width: 28px; height: 12px; border: 1px solid var(--rule-strong); background: var(--cyan); }
-.legend-spin { background: var(--amber); }
+.legend-density, .legend-signed { width: 28px; height: 12px; border: 1px solid var(--rule-strong); background: var(--cyan); }
+.legend-signed { background: linear-gradient(90deg, var(--danger) 0 50%, var(--amber) 50%); }
 .legend-nucleus { width: 12px; height: 12px; border-radius: 50%; background: var(--amber); }
 .legend-trajectory { width: 28px; height: 2px; background: var(--amber); }
 .selected-readout {

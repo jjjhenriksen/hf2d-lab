@@ -6,6 +6,7 @@ import { PresetRail } from './components/PresetRail'
 import { SimulationCanvas } from './components/SimulationCanvas'
 import { TopBar } from './components/TopBar'
 import { sameSimulationConfig } from './simulation/config-state'
+import { fieldViewOptions, type FieldViewId } from './simulation/field-views'
 import { cloneAsSandbox, clonePreset } from './simulation/presets'
 import { downloadBlob, exportSession, importSession, restoreAutosave } from './simulation/session'
 import { validateConfig } from './simulation/schema'
@@ -19,7 +20,7 @@ export function App() {
   const [mode, setMode] = useState<'guided' | 'sandbox'>('guided')
   const [selectedPreset, setSelectedPreset] = useState<PresetId>('h2')
   const [selectedNucleusId, setSelectedNucleusId] = useState<string | null>('h-a')
-  const [showSpin, setShowSpin] = useState(false)
+  const [fieldView, setFieldView] = useState<FieldViewId>('density')
   const [runSpeed, setRunSpeed] = useState<RunSpeed>(1)
   const [validationError, setValidationError] = useState<string | null>(null)
   const simulation = useSimulation(initialRef.current)
@@ -33,6 +34,7 @@ export function App() {
     || (appliedConfig.scf.allowUnconvergedDynamics && displayedSnapshot?.scf.usedBestIteration),
   ) && !simulation.error && !validationError
   const canSolve = !isRunning && !isBusy && !validationError
+  const activeFieldView = fieldViewOptions(config).some(({ id }) => id === fieldView) ? fieldView : 'density'
 
   const applyConfig = useCallback((next: SimulationConfig) => {
     try {
@@ -172,7 +174,7 @@ export function App() {
           snapshot={displayedSnapshot}
           selectedNucleusId={selectedNucleusId}
           editable={mode === 'sandbox' && !isRunning && !isBusy}
-          showSpin={showSpin}
+          fieldView={activeFieldView}
           onSelectNucleus={setSelectedNucleusId}
           onMoveNucleus={moveNucleus}
         />
@@ -184,9 +186,9 @@ export function App() {
           canEditDynamics={!isRunning && !isBusy}
           canEditScfPolicy={!isRunning && !isBusy}
           selectedNucleusId={selectedNucleusId}
-          showSpin={showSpin}
+          fieldView={activeFieldView}
           runSpeed={runSpeed}
-          onShowSpinChange={setShowSpin}
+          onFieldViewChange={setFieldView}
           onRunSpeedChange={handleRunSpeedChange}
           onConfigChange={applyConfig}
           onSelectNucleus={setSelectedNucleusId}

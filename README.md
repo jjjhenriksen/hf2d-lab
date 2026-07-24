@@ -45,6 +45,8 @@ If an SCF solve reaches its iteration limit, the engine restores the finite iter
 
 The sandbox’s **Real-space grid** controls set the square integration grid and symmetric limits `[-L, L]²`; the inspector reports the derived spacing `Δx = 2L / N`. Orbitals are represented directly at those grid points, so “basis size” does not refer to a separate Gaussian or atom-centered basis family in this model.
 
+The **Field** selector switches between total density, spin density, and individual occupied orbitals. RHF displays each paired spatial orbital once; UHF exposes every occupied α and β spin-orbital with signed amplitude.
+
 ### WebGPU validation
 
 Performance comparisons use the H₂ analogue in Chrome, discard the first solve after changing a backend or grid, and report the median of five worker-reported SCF durations. The 128² fixture runs to convergence with the default 200-iteration cap. Because the current 256² fixture does not converge on either backend within that cap, its throughput comparison uses exactly 20 iterations and requires both paths to report the same nonconverged state.
