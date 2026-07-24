@@ -13,7 +13,7 @@ const common = {
   softening: 0.5,
   referenceLength: 1,
   coupling: 1,
-  scf: { tolerance: 1e-6, energyTolerance: 1e-8, maxIterations: 200, mixing: 0.16, allowUnconvergedDynamics: false },
+  scf: { tolerance: 1e-6, energyTolerance: 1e-8, maxIterations: 200, mixing: 0.16, acceleration: 'kinetic-preconditioner' as const, preconditionerShift: 1.25, allowUnconvergedDynamics: false },
   dynamics: { timeStep: 0.05, totalTime: 50, damping: 0, integrator: 'velocity-verlet' as const, boundary: 'none' as const },
   seed: 982451653,
   backend: 'auto' as const,

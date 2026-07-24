@@ -1,7 +1,7 @@
 import { AlertTriangle, ChevronDown, Download, FileUp, Plus, Trash2 } from 'lucide-react'
 import { useEffect, useId, useRef, useState } from 'react'
 import { gridSpacing, integrationLimits } from '../simulation/discretization'
-import type { BackendCapabilities, Nucleus, RunSpeed, SimulationConfig, SimulationSnapshot } from '../simulation/types'
+import type { BackendCapabilities, Nucleus, RunSpeed, ScfAcceleration, SimulationConfig, SimulationSnapshot } from '../simulation/types'
 
 interface InspectorProps {
   config: SimulationConfig
@@ -80,6 +80,10 @@ export function Inspector(props: InspectorProps) {
         <NumberField label="Max iterations" value={config.scf.maxIterations} min={1} recommendedMin={10} recommendedMax={1000} step={10} disabled={!editable} onCommit={(value) => update((draft) => { draft.scf.maxIterations = Math.round(value) })} />
         <label className="toggle-row"><span>Approximate dynamics</span><input type="checkbox" checked={config.scf.allowUnconvergedDynamics} disabled={!canEditScfPolicy} onChange={(event) => update((draft) => { draft.scf.allowUnconvergedDynamics = event.target.checked })} /></label>
         <p className="control-note">Off by default. When enabled, a failed solve continues from its lowest-energy finite iteration and remains marked unconverged.</p>
+        <SelectField label="Acceleration" value={config.scf.acceleration} disabled={!editable} options={[['kinetic-preconditioner', 'Kinetic preconditioner'], ['none', 'None · residual descent']]} onChange={(value) => update((draft) => { draft.scf.acceleration = value as ScfAcceleration })} />
+        <NumberField label="Residual mixing" value={config.scf.mixing} positive recommendedMin={0.005} recommendedMax={0.325} step={0.01} disabled={!editable} onCommit={(value) => update((draft) => { draft.scf.mixing = value })} />
+        <NumberField label="Preconditioner shift" value={config.scf.preconditionerShift} positive recommendedMin={0.1} recommendedMax={10} step={0.05} disabled={!editable || config.scf.acceleration === 'none'} onCommit={(value) => update((draft) => { draft.scf.preconditionerShift = value })} />
+        <p className="control-note">Residual descent applies no accelerator. The update step is twice the mixing coefficient, clamped to 0.01–0.65; the kinetic preconditioner also uses the positive spectral shift.</p>
         <div className="convergence-row">
           <span>Convergence</span>
           <div className="convergence-lights" aria-label={snapshot?.scf.converged ? 'SCF converged' : 'SCF not converged'}>

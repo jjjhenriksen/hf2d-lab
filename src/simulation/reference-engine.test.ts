@@ -140,4 +140,31 @@ describe('real-space Hartree–Fock engine', () => {
     expect(stepped.time).toBeCloseTo(approximateConfig.dynamics.timeStep, 12)
     expect(stepped.message).toContain('Accepted approximate step')
   }, 20000)
+
+  it('selects and tunes the configured convergence acceleration path', async () => {
+    const config = clonePreset('h2')
+    config.scf.maxIterations = 3
+    config.scf.tolerance = 1e-20
+    config.scf.energyTolerance = 1e-20
+    const spacing = 2 * config.domainRadius / config.gridSize
+    const reference = new OpenBoundaryConvolver(config.gridSize, spacing, config.softening, config.referenceLength)
+    const shifts: number[] = []
+    const convolver = {
+      convolve: (field: Float64Array) => reference.convolve(field),
+      precondition: (field: Float64Array, shift?: number) => {
+        shifts.push(shift ?? 0)
+        return reference.precondition(field, shift)
+      },
+    }
+
+    config.scf.acceleration = 'none'
+    await new ReferenceHartreeFockEngine(config, { convolver }).initialize()
+    expect(shifts).toEqual([])
+
+    config.scf.acceleration = 'kinetic-preconditioner'
+    config.scf.preconditionerShift = 0.75
+    await new ReferenceHartreeFockEngine(config, { convolver }).initialize()
+    expect(shifts.length).toBeGreaterThan(0)
+    expect(shifts.every((shift) => shift === 0.75)).toBe(true)
+  }, 20000)
 })

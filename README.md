@@ -37,7 +37,9 @@ npm run check
 - A TypeScript implementation remains as the portable diagnostic fallback and as a directly testable reference.
 - WebGPU hybrid mode batches alpha/beta density reduction and every occupied-orbital kinetic stencil, then runs FFT convolution and kinetic preconditioning through reusable float32 GPU buffers. It reports float32 precision explicitly, uses a documented `2e-5` SCF residual floor, and retains convergence-gated force acceptance. Rust/WASM remains the portable float64 reference path.
 
-The solver uses a fourth-order finite-difference kinetic operator, exact occupied-orbital exchange convolutions, residual-based orbital optimization with kinetic preconditioning, and a convergence-gated Velocity Verlet step. Unconverged geometries are rejected without advancing time.
+The solver uses a fourth-order finite-difference kinetic operator, exact occupied-orbital exchange convolutions, residual-based orbital optimization with optional kinetic preconditioning, and a convergence-gated Velocity Verlet step. Unconverged geometries are rejected without advancing time.
+
+The SCF inspector exposes the active convergence strategy. **None** uses raw residual descent; **Kinetic preconditioner** retains the existing accelerated path and accepts a tunable positive spectral shift. Residual mixing is configurable for both modes, and existing v1 sessions default to the preconditioned strategy.
 
 If an SCF solve reaches its iteration limit, the engine restores the finite iteration with the lowest electronic energy. Dynamics still requires convergence by default; **Approximate dynamics** is an explicit opt-in that permits steps from the retained iterate while keeping the result visibly marked unconverged.
 
