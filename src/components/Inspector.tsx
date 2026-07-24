@@ -1,5 +1,6 @@
 import { AlertTriangle, ChevronDown, Download, FileUp, Plus, Trash2 } from 'lucide-react'
 import { useEffect, useId, useRef, useState } from 'react'
+import { gridSpacing, integrationLimits } from '../simulation/discretization'
 import type { BackendCapabilities, Nucleus, RunSpeed, SimulationConfig, SimulationSnapshot } from '../simulation/types'
 
 interface InspectorProps {
@@ -25,6 +26,7 @@ export function Inspector(props: InspectorProps) {
   const fileRef = useRef<HTMLInputElement>(null)
   const [advanced, setAdvanced] = useState(false)
   const selected = config.nuclei.find((nucleus) => nucleus.id === selectedNucleusId) ?? null
+  const [lowerLimit, upperLimit] = integrationLimits(config.domainRadius)
   const update = (recipe: (draft: SimulationConfig) => void) => {
     const next = structuredClone(config)
     recipe(next)
@@ -65,9 +67,16 @@ export function Inspector(props: InspectorProps) {
         <ReadoutRow label="Potential" value="Logarithmic 2D" />
       </InspectorGroup>
 
+      <InspectorGroup title="Real-space grid">
+        <SelectField label="Integration grid" value={String(config.gridSize)} disabled={!editable} options={[['64', '64 × 64 points'], ['128', '128 × 128 points'], ['256', '256 × 256 experimental']]} onChange={(value) => update((draft) => { draft.gridSize = Number(value) as 64 | 128 | 256 })} />
+        <NumberField label="Domain half-width L" value={config.domainRadius} positive recommendedMin={2} recommendedMax={50} step={0.5} unit="a₀" disabled={!editable} onCommit={(value) => update((draft) => { draft.domainRadius = value })} />
+        <ReadoutRow label="Integration limits" value={`[${lowerLimit.toFixed(2)}, ${upperLimit.toFixed(2)}]²`} unit="a₀" />
+        <ReadoutRow label="Grid spacing Δx" value={gridSpacing(config).toPrecision(4)} unit="a₀" />
+        <p className="control-note">Orbitals are represented directly at these real-space grid points; this model does not use a separate atom-centered basis-set family.</p>
+      </InspectorGroup>
+
       <InspectorGroup title="SCF">
         <NumberField label="SCF tolerance" value={config.scf.tolerance} positive recommendedMin={1e-9} recommendedMax={1e-2} step={1e-6} disabled={!editable} exponential onCommit={(value) => update((draft) => { draft.scf.tolerance = value })} />
-        <SelectField label="Basis size" value={String(config.gridSize)} disabled={!editable} options={[['64', '64 × 64 grid'], ['128', '128 × 128 grid'], ['256', '256 × 256 experimental']]} onChange={(value) => update((draft) => { draft.gridSize = Number(value) as 64 | 128 | 256 })} />
         <NumberField label="Max iterations" value={config.scf.maxIterations} min={1} recommendedMin={10} recommendedMax={1000} step={10} disabled={!editable} onCommit={(value) => update((draft) => { draft.scf.maxIterations = Math.round(value) })} />
         <label className="toggle-row"><span>Approximate dynamics</span><input type="checkbox" checked={config.scf.allowUnconvergedDynamics} disabled={!canEditScfPolicy} onChange={(event) => update((draft) => { draft.scf.allowUnconvergedDynamics = event.target.checked })} /></label>
         <p className="control-note">Off by default. When enabled, a failed solve continues from its lowest-energy finite iteration and remains marked unconverged.</p>
