@@ -378,8 +378,8 @@ button:not(:disabled) { cursor: pointer; }
 
 @media (max-width: 620px) {
   .topbar { align-items: stretch; }
-  .transport { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
-  .transport button { flex-direction: column; gap: 1px; padding: 4px; font-size: 11px; }
+  .transport { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+  .transport button { min-width: 0; flex-direction: column; gap: 1px; padding: 4px; font-size: 11px; white-space: normal; }
   .workspace { min-width: 0; }
   .preset-rail nav { grid-template-columns: 1fr; }
   .preset-rail nav button { min-height: 44px; }

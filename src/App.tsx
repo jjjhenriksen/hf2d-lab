@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, LoaderCircle } from 'lucide-react'
 import { Diagnostics } from './components/Diagnostics'
 import { Inspector } from './components/Inspector'
 import { PresetRail } from './components/PresetRail'
 import { SimulationCanvas } from './components/SimulationCanvas'
 import { TopBar } from './components/TopBar'
+import { sameSimulationConfig } from './simulation/config-state'
 import { cloneAsSandbox, clonePreset } from './simulation/presets'
 import { downloadBlob, exportSession, importSession, restoreAutosave } from './simulation/session'
 import { validateConfig } from './simulation/schema'
@@ -14,6 +15,7 @@ import { useSimulation } from './simulation/use-simulation'
 export function App() {
   const initialRef = useRef(clonePreset('h2'))
   const [config, setConfig] = useState<SimulationConfig>(initialRef.current)
+  const [appliedConfig, setAppliedConfig] = useState<SimulationConfig>(initialRef.current)
   const [mode, setMode] = useState<'guided' | 'sandbox'>('guided')
   const [selectedPreset, setSelectedPreset] = useState<PresetId>('h2')
   const [selectedNucleusId, setSelectedNucleusId] = useState<string | null>('h-a')
@@ -21,25 +23,45 @@ export function App() {
   const [runSpeed, setRunSpeed] = useState<RunSpeed>(1)
   const [validationError, setValidationError] = useState<string | null>(null)
   const simulation = useSimulation(initialRef.current)
-  const { pause, reset, run, step } = simulation
+  const { pause, run, step } = simulation
   const isRunning = simulation.snapshot?.status === 'running'
   const isBusy = Boolean(simulation.progress)
+  const needsScf = useMemo(() => !sameSimulationConfig(config, appliedConfig), [config, appliedConfig])
+  const displayedSnapshot = needsScf ? null : simulation.snapshot
   const canRun = Boolean(
-    simulation.snapshot?.scf.converged
-    || (config.scf.allowUnconvergedDynamics && simulation.snapshot?.scf.usedBestIteration),
+    displayedSnapshot?.scf.converged
+    || (appliedConfig.scf.allowUnconvergedDynamics && displayedSnapshot?.scf.usedBestIteration),
   ) && !simulation.error && !validationError
+  const canSolve = !isRunning && !isBusy && !validationError
 
   const applyConfig = useCallback((next: SimulationConfig) => {
     try {
       const validated = validateConfig(next)
       setConfig(validated)
       setValidationError(null)
-      simulation.initialize(validated)
     } catch (error) {
       setConfig(next)
       setValidationError(error instanceof Error ? error.message : 'Invalid configuration.')
     }
-  }, [simulation.initialize])
+  }, [])
+
+  const solveScf = useCallback(() => {
+    try {
+      const validated = validateConfig(config)
+      setConfig(validated)
+      setAppliedConfig(validated)
+      setValidationError(null)
+      simulation.initialize(validated)
+    } catch (error) {
+      setValidationError(error instanceof Error ? error.message : 'Invalid configuration.')
+    }
+  }, [config, simulation.initialize])
+
+  const resetAppliedConfig = useCallback(() => {
+    setConfig(appliedConfig)
+    setValidationError(null)
+    simulation.reset(appliedConfig)
+  }, [appliedConfig, simulation.reset])
 
   const handleRunSpeedChange = useCallback((stepsPerSecond: RunSpeed) => {
     setRunSpeed(stepsPerSecond)
@@ -52,6 +74,7 @@ export function App() {
       setMode('sandbox')
       setSelectedPreset('custom')
       setConfig(restored)
+      setAppliedConfig(restored)
       simulation.initialize(restored)
     })
   }, [simulation.initialize])
@@ -63,11 +86,11 @@ export function App() {
         event.preventDefault()
         if (isRunning) pause(); else if (canRun) run()
       } else if (event.key === '.' && canRun && !isRunning) step()
-      else if (event.key.toLowerCase() === 'r' && !isBusy) reset(config)
+      else if (event.key.toLowerCase() === 'r' && !isBusy) resetAppliedConfig()
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [canRun, config, isBusy, isRunning, pause, reset, run, step])
+  }, [canRun, isBusy, isRunning, pause, resetAppliedConfig, run, step])
 
   const selectPreset = (id: Exclude<PresetId, 'custom'>) => {
     const next = clonePreset(id)
@@ -75,6 +98,7 @@ export function App() {
     setSelectedPreset(id)
     setSelectedNucleusId(next.nuclei[0]?.id ?? null)
     setConfig(next)
+    setAppliedConfig(next)
     setValidationError(null)
     simulation.initialize(next)
   }
@@ -89,6 +113,7 @@ export function App() {
     setMode('sandbox')
     setSelectedPreset('custom')
     setConfig(next)
+    setAppliedConfig(next)
     simulation.initialize(next)
   }
 
@@ -115,6 +140,7 @@ export function App() {
       setMode('sandbox')
       setSelectedPreset('custom')
       setConfig(imported)
+      setAppliedConfig(imported)
       setValidationError(null)
       simulation.initialize(imported)
     } catch (error) {
@@ -130,17 +156,20 @@ export function App() {
         isRunning={isRunning}
         canRun={canRun}
         isBusy={isBusy}
+        needsScf={needsScf}
+        canSolve={canSolve}
         onModeChange={setWorkspaceMode}
         onRun={simulation.run}
         onPause={simulation.pause}
+        onSolve={solveScf}
         onStep={simulation.step}
-        onReset={() => simulation.reset(config)}
+        onReset={resetAppliedConfig}
       />
       <main className="workspace">
         <PresetRail selected={selectedPreset} mode={mode} onSelect={selectPreset} />
         <SimulationCanvas
           config={config}
-          snapshot={simulation.snapshot}
+          snapshot={displayedSnapshot}
           selectedNucleusId={selectedNucleusId}
           editable={mode === 'sandbox' && !isRunning && !isBusy}
           showSpin={showSpin}
@@ -149,7 +178,7 @@ export function App() {
         />
         <Inspector
           config={config}
-          snapshot={simulation.snapshot}
+          snapshot={displayedSnapshot}
           capabilities={simulation.capabilities}
           editable={mode === 'sandbox' && !isRunning && !isBusy}
           canEditDynamics={!isRunning && !isBusy}
@@ -165,10 +194,10 @@ export function App() {
           onImport={handleImport}
         />
       </main>
-      <Diagnostics snapshot={simulation.snapshot} />
+      <Diagnostics snapshot={displayedSnapshot} />
       <footer className="statusbar" aria-live="polite">
-        <span className={`status-indicator ${simulation.error || validationError ? 'is-error' : simulation.snapshot?.scf.converged ? 'is-ready' : ''}`} />
-        <span>{simulation.error || validationError || simulation.progress?.message || simulation.snapshot?.message || 'Preparing real-space grid'}</span>
+        <span className={`status-indicator ${simulation.error || validationError ? 'is-error' : !needsScf && simulation.snapshot?.scf.converged ? 'is-ready' : ''}`} />
+        <span>{simulation.error || validationError || (needsScf ? 'Parameters changed · Solve SCF to apply' : simulation.progress?.message || simulation.snapshot?.message || 'Preparing real-space grid')}</span>
         {simulation.progress && <span className="status-progress"><LoaderCircle aria-hidden="true" /> iteration {simulation.progress.iteration} · residual {simulation.progress.residual.toExponential(2)}</span>}
         {(simulation.error || validationError) && <AlertTriangle aria-hidden="true" />}
         <span className="status-time">t = {(simulation.snapshot?.time ?? 0).toFixed(3)} au</span>
