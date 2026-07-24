@@ -257,13 +257,17 @@ export class ReferenceHartreeFockEngine {
         converged = true
         break
       }
-      const step = Math.min(0.65, Math.max(0.16, this.config.scf.mixing * 2))
-      const alphaPreconditioned = await Promise.all(alphaResiduals.map((field) => this.convolver.precondition(field, 1.25)))
-      this.orbitalsAlpha = updateOrbitals(this.orbitalsAlpha, alphaPreconditioned, step, this.spacing)
+      const step = Math.min(0.65, Math.max(0.01, this.config.scf.mixing * 2))
+      const alphaDirection = this.config.scf.acceleration === 'kinetic-preconditioner'
+        ? await Promise.all(alphaResiduals.map((field) => this.convolver.precondition(field, this.config.scf.preconditionerShift)))
+        : alphaResiduals
+      this.orbitalsAlpha = updateOrbitals(this.orbitalsAlpha, alphaDirection, step, this.spacing)
       if (isRestricted) this.orbitalsBeta = this.orbitalsAlpha.map((orbital) => orbital.slice())
       else {
-        const betaPreconditioned = await Promise.all(betaResiduals.map((field) => this.convolver.precondition(field, 1.25)))
-        this.orbitalsBeta = updateOrbitals(this.orbitalsBeta, betaPreconditioned, step, this.spacing)
+        const betaDirection = this.config.scf.acceleration === 'kinetic-preconditioner'
+          ? await Promise.all(betaResiduals.map((field) => this.convolver.precondition(field, this.config.scf.preconditionerShift)))
+          : betaResiduals
+        this.orbitalsBeta = updateOrbitals(this.orbitalsBeta, betaDirection, step, this.spacing)
       }
       previousEnergy = electronic
       if (iteration % 4 === 0) await new Promise<void>((resolve) => setTimeout(resolve, 0))

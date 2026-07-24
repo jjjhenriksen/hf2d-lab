@@ -17,10 +17,14 @@ describe('simulation contract', () => {
   })
 
   it('defaults new options for existing v1 configurations', () => {
-    const legacy = structuredClone(clonePreset('h2')) as unknown as { dynamics: { damping?: number }; scf: { allowUnconvergedDynamics?: boolean } }
+    const legacy = structuredClone(clonePreset('h2')) as unknown as { dynamics: { damping?: number }; scf: { acceleration?: string; preconditionerShift?: number; allowUnconvergedDynamics?: boolean } }
     delete legacy.dynamics.damping
+    delete legacy.scf.acceleration
+    delete legacy.scf.preconditionerShift
     delete legacy.scf.allowUnconvergedDynamics
     expect(validateConfig(legacy).dynamics.damping).toBe(0)
+    expect(validateConfig(legacy).scf.acceleration).toBe('kinetic-preconditioner')
+    expect(validateConfig(legacy).scf.preconditionerShift).toBe(1.25)
     expect(validateConfig(legacy).scf.allowUnconvergedDynamics).toBe(false)
   })
 
