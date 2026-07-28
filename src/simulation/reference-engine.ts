@@ -41,6 +41,17 @@ interface ScfIterate {
   orbitalsBeta: Float64Array[]
 }
 
+interface ResetCheckpoint {
+  config: SimulationConfig
+  orbitalsAlpha: Float64Array[]
+  orbitalsBeta: Float64Array[]
+  lastSolve: SolveResult
+  initialEnergy: number
+  time: number
+  stepIndex: number
+  trajectory: TrajectoryPoint[]
+}
+
 export interface DensityAccelerator {
   densities: (alpha: Float64Array[], beta: Float64Array[], points: number, gridSize: number, spacing: number) => Promise<{
     alpha: Float64Array
@@ -79,6 +90,7 @@ export class ReferenceHartreeFockEngine {
   private stepIndex = 0
   private trajectory: TrajectoryPoint[] = []
   private lastSolve: SolveResult | null = null
+  private resetCheckpoint: ResetCheckpoint | null = null
   private cancelled = false
 
   constructor(config: SimulationConfig, options?: EngineOptions) {
@@ -103,6 +115,16 @@ export class ReferenceHartreeFockEngine {
     this.lastSolve = result
     this.initialEnergy = result.totalEnergy
     this.trajectory = [this.trajectoryPoint(result)]
+    this.resetCheckpoint = {
+      config: structuredClone(this.config),
+      orbitalsAlpha: this.orbitalsAlpha.map((orbital) => orbital.slice()),
+      orbitalsBeta: this.orbitalsBeta.map((orbital) => orbital.slice()),
+      lastSolve: result,
+      initialEnergy: this.initialEnergy,
+      time: this.time,
+      stepIndex: this.stepIndex,
+      trajectory: this.trajectory.map((entry) => ({ ...entry, positions: entry.positions.map((position) => [...position] as Vector2) })),
+    }
     const canUseApproximate = this.config.scf.allowUnconvergedDynamics && (result.usedBestIteration || result.usedLatestIteration)
     return this.snapshot(
       result,
@@ -119,6 +141,24 @@ export class ReferenceHartreeFockEngine {
             ? `SCF did not converge; retained latest iteration ${result.latestIteration}`
             : `SCF did not converge; retained lowest-energy iteration ${result.bestIteration}`,
     )
+  }
+
+  reset() {
+    const checkpoint = this.resetCheckpoint
+    if (!checkpoint) throw new Error('Solve the simulation before resetting it.')
+    this.cancelled = false
+    this.config = structuredClone(checkpoint.config)
+    this.spacing = (2 * this.config.domainRadius) / this.config.gridSize
+    this.externalPotential = this.buildExternalPotential()
+    this.orbitalsAlpha = checkpoint.orbitalsAlpha.map((orbital) => orbital.slice())
+    this.orbitalsBeta = checkpoint.orbitalsBeta.map((orbital) => orbital.slice())
+    this.lastSolve = checkpoint.lastSolve
+    this.initialEnergy = checkpoint.initialEnergy
+    this.time = checkpoint.time
+    this.stepIndex = checkpoint.stepIndex
+    this.trajectory = checkpoint.trajectory.map((entry) => ({ ...entry, positions: entry.positions.map((position) => [...position] as Vector2) }))
+    const canUseApproximate = this.config.scf.allowUnconvergedDynamics && (this.lastSolve.usedBestIteration || this.lastSolve.usedLatestIteration)
+    return this.snapshot(this.lastSolve, this.lastSolve.converged || canUseApproximate ? 'ready' : 'failed', 'Reset to the last solved checkpoint; press Solve SCF to apply new parameters.')
   }
 
   async reconfigure(config: SimulationConfig, progress?: ProgressCallback) {
