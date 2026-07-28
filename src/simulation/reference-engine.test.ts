@@ -201,6 +201,20 @@ describe('real-space Hartree–Fock engine', () => {
     expect(snapshot.message).toContain('max-iteration checkpoint')
   }, 20000)
 
+  it('resets to the solved checkpoint without running SCF again', async () => {
+    const config = clonePreset('h2')
+    const engine = new ReferenceHartreeFockEngine(config)
+    const initial = await engine.initialize()
+    await engine.step()
+    const reset = engine.reset()
+    expect(reset.status).toBe('ready')
+    expect(reset.message).toContain('last solved checkpoint')
+    expect(reset.time).toBe(0)
+    expect(reset.step).toBe(0)
+    expect(reset.trajectory).toHaveLength(1)
+    expect(reset.totalEnergy).toBeCloseTo(initial.totalEnergy, 10)
+  }, 20000)
+
   it('requires an explicit opt-in before stepping from the retained iterate', async () => {
     const strictConfig = clonePreset('h2')
     strictConfig.scf.maxIterations = 4

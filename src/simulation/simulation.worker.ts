@@ -54,7 +54,7 @@ async function capabilities(preference: 'auto' | 'wasm' | 'webgpu'): Promise<Bac
   return { webgpu, wasm, selected, reason, webgpuAdapter }
 }
 
-async function solveInitial(request: Extract<WorkerRequest, { type: 'initialize' | 'reconfigure' | 'reset' }>) {
+async function solveInitial(request: Extract<WorkerRequest, { type: 'initialize' | 'reconfigure' }>) {
   const config = validateConfig(request.config)
   activeRequestId = request.id
   isRunning = false
@@ -85,6 +85,12 @@ async function solveInitial(request: Extract<WorkerRequest, { type: 'initialize'
   })
   const snapshot = await engine.initialize(onProgress)
   sendSnapshot(request.id, snapshot)
+}
+
+function resetToCheckpoint(id: string) {
+  if (!engine) throw new Error('Initialize the solver before resetting.')
+  isRunning = false
+  sendSnapshot(id, engine.reset())
 }
 
 async function stepOnce(id: string, running: boolean) {
@@ -119,7 +125,8 @@ self.onmessage = (event: MessageEvent<WorkerRequest>) => {
   activeRequestId = request.id
   void (async () => {
     try {
-      if (request.type === 'initialize' || request.type === 'reconfigure' || request.type === 'reset') await solveInitial(request)
+      if (request.type === 'initialize' || request.type === 'reconfigure') await solveInitial(request)
+      else if (request.type === 'reset') resetToCheckpoint(request.id)
       else if (request.type === 'step') await stepOnce(request.id, false)
       else if (request.type === 'run') await runLoop(request.id)
       else if (request.type === 'setSpeed') runSpeed = validateRunSpeed(request.stepsPerSecond)
