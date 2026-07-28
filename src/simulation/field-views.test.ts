@@ -13,6 +13,8 @@ describe('simulation field views', () => {
       ['spin-density', 'Spin density'],
       ['orbital-alpha-0', 'Occupied orbital 1 · paired'],
       ['orbital-alpha-1', 'Occupied orbital 2 · paired'],
+      ['virtual-alpha-0', 'Virtual orbital 1 · paired'],
+      ['virtual-alpha-1', 'Virtual orbital 2 · paired'],
     ])
   })
 
@@ -25,6 +27,10 @@ describe('simulation field views', () => {
       'orbital-alpha-0',
       'orbital-alpha-1',
       'orbital-beta-0',
+      'virtual-alpha-0',
+      'virtual-beta-0',
+      'virtual-alpha-1',
+      'virtual-beta-1',
     ])
   })
 
@@ -58,5 +64,27 @@ describe('simulation field views', () => {
     expect(resolved.signed).toBe(true)
     expect(resolved.field).toBe(resolved.contour)
     expect(resolved.field.every((value) => value === -1)).toBe(true)
+  })
+
+  it('resolves a selected virtual orbital from its dedicated buffer', () => {
+    const config = clonePreset('h2')
+    const points = config.gridSize ** 2
+    const virtual = new Float32Array(points * 2)
+    virtual.fill(2, points, points * 2)
+    const snapshot = {
+      config,
+      gridSize: config.gridSize,
+      density: new Float32Array(points),
+      spinDensity: new Float32Array(points),
+      orbitalContours: new Float32Array(points),
+      orbitalAlpha: new Float32Array(points),
+      orbitalBeta: new Float32Array(points),
+      virtualOrbitalAlpha: virtual,
+      virtualOrbitalBeta: virtual,
+    } as unknown as SimulationSnapshot
+
+    const resolved = resolveFieldView(snapshot, 'virtual-alpha-1')
+    expect(resolved.label).toBe('Virtual orbital 2 · paired')
+    expect(resolved.field.every((value) => value === 2)).toBe(true)
   })
 })
