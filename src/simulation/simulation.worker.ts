@@ -60,8 +60,8 @@ async function solveInitial(request: Extract<WorkerRequest, { type: 'initialize'
   isRunning = false
   const caps = await capabilities(config.backend)
   send({ id: request.id, type: 'capabilities', capabilities: caps })
-  const onProgress = (iteration: number, residual: number) => {
-    if (iteration === 1 || iteration % 4 === 0) send({ id: request.id, type: 'progress', iteration, residual, message: 'Optimizing occupied orbitals' })
+  const onProgress = (iteration: number, residual: number, energy: number) => {
+    if (iteration === 1 || iteration % 4 === 0) send({ id: request.id, type: 'progress', iteration, residual, energy, message: 'Optimizing occupied orbitals' })
   }
   const convolver = caps.selected === 'webgpu' && accelerator
     ? await accelerator.createConvolver(config)
@@ -89,8 +89,8 @@ async function solveInitial(request: Extract<WorkerRequest, { type: 'initialize'
 
 async function stepOnce(id: string, running: boolean) {
   if (!engine) throw new Error('Initialize the solver before stepping.')
-  const snapshot = await engine.step((iteration, residual) => {
-    if (iteration === 1 || iteration % 4 === 0) send({ id, type: 'progress', iteration, residual, message: 'Converging the next Born–Oppenheimer state' })
+  const snapshot = await engine.step((iteration, residual, energy) => {
+    if (iteration === 1 || iteration % 4 === 0) send({ id, type: 'progress', iteration, residual, energy, message: 'Converging the next Born–Oppenheimer state' })
   })
   const remainsRunning = running && isRunning
   sendSnapshot(id, { ...snapshot, status: remainsRunning ? 'running' : 'paused', message: remainsRunning ? 'Running converged dynamics' : running ? 'Paused at accepted checkpoint' : snapshot.message })

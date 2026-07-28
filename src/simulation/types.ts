@@ -133,7 +133,7 @@ export type WorkerRequest =
   | { id: string; type: 'cancel' }
 
 export type WorkerResponse =
-  | { id: string; type: 'progress'; iteration: number; residual: number; message: string }
+  | { id: string; type: 'progress'; iteration: number; residual: number; energy: number; message: string }
   | { id: string; type: 'snapshot'; snapshot: SimulationSnapshot }
   | { id: string; type: 'capabilities'; capabilities: BackendCapabilities }
   | { id: string; type: 'error'; code: string; message: string; recoverable: boolean }
