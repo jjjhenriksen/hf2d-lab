@@ -586,6 +586,7 @@ export class ReferenceHartreeFockEngine {
   private snapshot(result: SolveResult, status: SimulationSnapshot['status'], message: string): SimulationSnapshot {
     const point = this.trajectoryPoint(result)
     const flatten = (orbitals: Float64Array[]) => Float32Array.from(orbitals.flatMap((orbital) => Array.from(orbital)))
+    const occupations = spinOccupations(this.config.electrons, this.config.multiplicity, this.config.method)
     return {
       schema: 'hf2d-snapshot/v1',
       status,
@@ -601,6 +602,7 @@ export class ReferenceHartreeFockEngine {
       orbitalContours: Float32Array.from(this.orbitalsAlpha[0] ?? result.density),
       orbitalAlpha: flatten(this.orbitalsAlpha),
       orbitalBeta: flatten(this.orbitalsBeta),
+      orbitalCounts: { occupiedAlpha: occupations.alpha, occupiedBeta: occupations.beta, virtualAlpha: this.config.scf.virtualOrbitals, virtualBeta: this.config.scf.virtualOrbitals },
       gridSize: this.config.gridSize,
       energies: { ...result.energies, nuclearKinetic: this.nuclearKineticEnergy() },
       totalEnergy: point.totalEnergy,
