@@ -80,12 +80,13 @@ export function Inspector(props: InspectorProps) {
 
       <InspectorGroup title="View">
         <SelectField label="Field" value={selectedFieldView} options={viewOptions.map(({ id, label }) => [id, label])} onChange={(value) => onFieldViewChange(value as FieldViewId)} />
-        <p className="control-note">Orbital views show signed amplitude; RHF lists paired spatial orbitals once, while UHF lists each occupied spin-orbital.</p>
+        <p className="control-note">Orbital views show signed amplitude; occupied and virtual states are listed separately, with RHF paired spatial orbitals shown once.</p>
       </InspectorGroup>
 
       <InspectorGroup title="SCF">
         <NumberField label="SCF tolerance" value={config.scf.tolerance} positive recommendedMin={1e-9} recommendedMax={1e-2} step={1e-6} disabled={!editable} exponential onCommit={(value) => update((draft) => { draft.scf.tolerance = value })} />
         <NumberField label="Max iterations" value={config.scf.maxIterations} min={1} recommendedMin={10} recommendedMax={1000} step={10} disabled={!editable} onCommit={(value) => update((draft) => { draft.scf.maxIterations = Math.round(value) })} />
+        <NumberField label="Virtual orbitals" value={config.scf.virtualOrbitals} min={0} max={24} recommendedMin={1} recommendedMax={8} step={1} disabled={!editable} onCommit={(value) => update((draft) => { draft.scf.virtualOrbitals = Math.round(value) })} />
         <label className="toggle-row"><span>Approximate dynamics</span><input type="checkbox" checked={config.scf.allowUnconvergedDynamics} disabled={!canEditScfPolicy} onChange={(event) => update((draft) => { draft.scf.allowUnconvergedDynamics = event.target.checked })} /></label>
         <p className="control-note">Off by default. When enabled, a failed solve can advance from a retained finite iteration and remains marked unconverged.</p>
         {config.scf.allowUnconvergedDynamics && <SelectField label="Approximate start" value={config.scf.approximateDynamicsPolicy} disabled={!canEditScfPolicy} options={[['lowest-energy', 'Lowest-energy iteration'], ['latest-iteration', 'Latest iteration']]} onChange={(value) => update((draft) => { draft.scf.approximateDynamicsPolicy = value as SimulationConfig['scf']['approximateDynamicsPolicy'] })} />}

@@ -1,8 +1,8 @@
 import { spinOccupations, type SimulationConfig, type SimulationSnapshot } from './types'
 
-const ORBITAL_VIEW_PATTERN = /^orbital-(alpha|beta)-(\d+)$/
+const ORBITAL_VIEW_PATTERN = /^(orbital|virtual)-(alpha|beta)-(\d+)$/
 
-export type FieldViewId = 'density' | 'spin-density' | `orbital-alpha-${number}` | `orbital-beta-${number}`
+export type FieldViewId = 'density' | 'spin-density' | `orbital-alpha-${number}` | `orbital-beta-${number}` | `virtual-alpha-${number}` | `virtual-beta-${number}`
 
 export interface FieldViewOption {
   id: FieldViewId
@@ -27,6 +27,9 @@ export function fieldViewOptions(config: SimulationConfig): FieldViewOption[] {
       for (let index = 0; index < occupations.alpha; index += 1) {
         options.push({ id: `orbital-alpha-${index}`, label: `Occupied orbital ${index + 1} · paired` })
       }
+      for (let index = 0; index < config.scf.virtualOrbitals; index += 1) {
+        options.push({ id: `virtual-alpha-${index}`, label: `Virtual orbital ${index + 1} · paired` })
+      }
       return options
     }
 
@@ -35,6 +38,10 @@ export function fieldViewOptions(config: SimulationConfig): FieldViewOption[] {
     }
     for (let index = 0; index < occupations.beta; index += 1) {
       options.push({ id: `orbital-beta-${index}`, label: `β spin-orbital ${index + 1}` })
+    }
+    for (let index = 0; index < config.scf.virtualOrbitals; index += 1) {
+      options.push({ id: `virtual-alpha-${index}`, label: `Virtual α orbital ${index + 1}` })
+      options.push({ id: `virtual-beta-${index}`, label: `Virtual β orbital ${index + 1}` })
     }
   } catch {
     // Invalid in-progress sandbox configurations retain the two aggregate views.
@@ -53,8 +60,10 @@ export function resolveFieldView(snapshot: SimulationSnapshot, requestedId: Fiel
 
   const match = ORBITAL_VIEW_PATTERN.exec(option.id)
   if (!match) return densityView(snapshot)
-  const flattened = match[1] === 'alpha' ? snapshot.orbitalAlpha : snapshot.orbitalBeta
-  const field = flattened && orbitalField(flattened, snapshot.gridSize, Number(match[2]))
+  const flattened = match[1] === 'virtual'
+    ? match[2] === 'alpha' ? snapshot.virtualOrbitalAlpha : snapshot.virtualOrbitalBeta
+    : match[2] === 'alpha' ? snapshot.orbitalAlpha : snapshot.orbitalBeta
+  const field = flattened && orbitalField(flattened, snapshot.gridSize, Number(match[3]))
   if (!field) return densityView(snapshot)
   return { ...option, field, contour: field, signed: true }
 }
