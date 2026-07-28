@@ -115,6 +115,10 @@ export interface SimulationSnapshot {
   orbitalContours: Float32Array
   orbitalAlpha?: Float32Array
   orbitalBeta?: Float32Array
+  virtualOrbitalAlpha?: Float32Array
+  virtualOrbitalBeta?: Float32Array
+  orbitalEnergiesAlpha?: number[]
+  orbitalEnergiesBeta?: number[]
   orbitalCounts: OrbitalCounts
   gridSize: number
   energies: EnergyComponents

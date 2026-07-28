@@ -244,6 +244,18 @@ describe('real-space Hartree–Fock engine', () => {
     expect(reset.nuclei[0]?.position).toEqual(baseline.nuclei[0]?.position)
   }, 20000)
 
+  it('computes finite virtual orbitals and energies within the configured budget', async () => {
+    const config = clonePreset('h2')
+    config.scf.virtualOrbitals = 2
+    const snapshot = await new ReferenceHartreeFockEngine(config).initialize()
+    expect(snapshot.virtualOrbitalAlpha).toHaveLength(config.scf.virtualOrbitals * config.gridSize ** 2)
+    expect(snapshot.virtualOrbitalBeta).toHaveLength(config.scf.virtualOrbitals * config.gridSize ** 2)
+    expect(snapshot.orbitalEnergiesAlpha).toHaveLength(config.scf.virtualOrbitals)
+    expect(snapshot.orbitalEnergiesBeta).toHaveLength(config.scf.virtualOrbitals)
+    expect(snapshot.orbitalEnergiesAlpha?.every(Number.isFinite)).toBe(true)
+    expect(snapshot.virtualOrbitalAlpha?.every(Number.isFinite)).toBe(true)
+  }, 20000)
+
   it('requires an explicit opt-in before stepping from the retained iterate', async () => {
     const strictConfig = clonePreset('h2')
     strictConfig.scf.maxIterations = 4
