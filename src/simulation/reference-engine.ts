@@ -50,6 +50,10 @@ interface ResetCheckpoint {
   time: number
   stepIndex: number
   trajectory: TrajectoryPoint[]
+  virtualOrbitalsAlpha: Float64Array[]
+  virtualOrbitalsBeta: Float64Array[]
+  virtualEnergiesAlpha: number[]
+  virtualEnergiesBeta: number[]
 }
 
 export interface DensityAccelerator {
@@ -80,6 +84,10 @@ export class ReferenceHartreeFockEngine {
   private config: SimulationConfig
   private orbitalsAlpha: Float64Array[] = []
   private orbitalsBeta: Float64Array[] = []
+  private virtualOrbitalsAlpha: Float64Array[] = []
+  private virtualOrbitalsBeta: Float64Array[] = []
+  private virtualEnergiesAlpha: number[] = []
+  private virtualEnergiesBeta: number[] = []
   private convolver: EngineConvolver
   private readonly makeConvolver: (config: SimulationConfig) => EngineConvolver
   private readonly densityAccelerator?: DensityAccelerator
@@ -148,6 +156,10 @@ export class ReferenceHartreeFockEngine {
     this.externalPotential = this.buildExternalPotential()
     this.orbitalsAlpha = checkpoint.orbitalsAlpha.map((orbital) => orbital.slice())
     this.orbitalsBeta = checkpoint.orbitalsBeta.map((orbital) => orbital.slice())
+    this.virtualOrbitalsAlpha = checkpoint.virtualOrbitalsAlpha.map((orbital) => orbital.slice())
+    this.virtualOrbitalsBeta = checkpoint.virtualOrbitalsBeta.map((orbital) => orbital.slice())
+    this.virtualEnergiesAlpha = [...checkpoint.virtualEnergiesAlpha]
+    this.virtualEnergiesBeta = [...checkpoint.virtualEnergiesBeta]
     this.lastSolve = checkpoint.lastSolve
     this.initialEnergy = checkpoint.initialEnergy
     this.time = checkpoint.time
@@ -174,6 +186,10 @@ export class ReferenceHartreeFockEngine {
       time: this.time,
       stepIndex: this.stepIndex,
       trajectory: this.trajectory.map((entry) => ({ ...entry, positions: entry.positions.map((position) => [...position] as Vector2) })),
+      virtualOrbitalsAlpha: this.virtualOrbitalsAlpha.map((orbital) => orbital.slice()),
+      virtualOrbitalsBeta: this.virtualOrbitalsBeta.map((orbital) => orbital.slice()),
+      virtualEnergiesAlpha: [...this.virtualEnergiesAlpha],
+      virtualEnergiesBeta: [...this.virtualEnergiesBeta],
     }
   }
 
@@ -285,6 +301,7 @@ export class ReferenceHartreeFockEngine {
       components.nuclearKinetic = this.nuclearKineticEnergy()
       const electronic = components.nuclear
       history.push({ iteration: 0, residual: 0, energy: electronic })
+      await this.computeVirtualOrbitals(density)
       return {
         density,
         spinDensity,
@@ -404,6 +421,7 @@ export class ReferenceHartreeFockEngine {
       this.orbitalsAlpha = retained.orbitalsAlpha
       this.orbitalsBeta = retained.orbitalsBeta
     }
+    await this.computeVirtualOrbitals(density)
     components.nuclearKinetic = this.nuclearKineticEnergy()
     const totalEnergy = Object.values(components).reduce((sum, value) => sum + value, 0)
     return {
@@ -426,6 +444,10 @@ export class ReferenceHartreeFockEngine {
   }
 
   private initializeOrbitals() {
+    this.virtualOrbitalsAlpha = []
+    this.virtualOrbitalsBeta = []
+    this.virtualEnergiesAlpha = []
+    this.virtualEnergiesBeta = []
     const { alpha, beta } = spinOccupations(this.config.electrons, this.config.multiplicity, this.config.method)
     this.orbitalsAlpha = this.seedOrbitals(alpha, 0)
     this.orbitalsBeta = this.config.method === 'RHF'
@@ -486,7 +508,33 @@ export class ReferenceHartreeFockEngine {
     return result
   }
 
-  private async applyFock(orbitals: Float64Array[], hartreePotential: Float64Array, acceleratedKinetic?: Float64Array[]) {
+  private async computeVirtualOrbitals(density: Float64Array) {
+    const count = this.config.scf.virtualOrbitals
+    if (count === 0) {
+      this.virtualOrbitalsAlpha = []
+      this.virtualOrbitalsBeta = []
+      this.virtualEnergiesAlpha = []
+      this.virtualEnergiesBeta = []
+      return
+    }
+    const hartreePotential = await this.convolver.convolve(density)
+    const makeVirtuals = (occupied: Float64Array[], spinOffset: number) => orthonormalize([...occupied, ...this.seedOrbitals(count, occupied.length + spinOffset)], this.spacing).slice(occupied.length)
+    const solveVirtuals = async (occupied: Float64Array[], spinOffset: number) => {
+      let virtuals = makeVirtuals(occupied, spinOffset)
+      let fock = await this.applyFock(virtuals, hartreePotential, undefined, occupied)
+      virtuals = orthonormalize([...occupied, ...fock.orbitals], this.spacing).slice(occupied.length)
+      fock = await this.applyFock(virtuals, hartreePotential, undefined, occupied)
+      return { virtuals, energies: fock.orbitals.map((field, index) => innerProduct(virtuals[index]!, field, this.spacing)) }
+    }
+    const alpha = await solveVirtuals(this.orbitalsAlpha, 0)
+    const beta = this.config.method === 'RHF' ? { virtuals: alpha.virtuals.map((orbital) => orbital.slice()), energies: [...alpha.energies] } : await solveVirtuals(this.orbitalsBeta, 1)
+    this.virtualOrbitalsAlpha = alpha.virtuals
+    this.virtualOrbitalsBeta = beta.virtuals
+    this.virtualEnergiesAlpha = alpha.energies
+    this.virtualEnergiesBeta = beta.energies
+  }
+
+  private async applyFock(orbitals: Float64Array[], hartreePotential: Float64Array, acceleratedKinetic?: Float64Array[], exchangeOrbitals = orbitals) {
     let exchangeEnergy = 0
     const kinetic = acceleratedKinetic ?? orbitals.map((orbital) => applyKinetic(orbital, this.config.gridSize, this.spacing))
     const fockOrbitals: Float64Array[] = []
@@ -494,7 +542,7 @@ export class ReferenceHartreeFockEngine {
       const orbital = orbitals[orbitalIndex]!
       const result = new Float64Array(orbital.length)
       for (let i = 0; i < result.length; i += 1) result[i] = kinetic[orbitalIndex]![i]! + (this.externalPotential[i]! + hartreePotential[i]!) * orbital[i]!
-      for (const occupied of orbitals) {
+      for (const occupied of exchangeOrbitals) {
         const pairDensity = multiplyFields(occupied, orbital)
         const exchangePotential = await this.convolver.convolve(pairDensity)
         exchangeEnergy -= 0.5 * innerProduct(pairDensity, exchangePotential, this.spacing)
@@ -602,6 +650,10 @@ export class ReferenceHartreeFockEngine {
       orbitalContours: Float32Array.from(this.orbitalsAlpha[0] ?? result.density),
       orbitalAlpha: flatten(this.orbitalsAlpha),
       orbitalBeta: flatten(this.orbitalsBeta),
+      virtualOrbitalAlpha: flatten(this.virtualOrbitalsAlpha),
+      virtualOrbitalBeta: flatten(this.virtualOrbitalsBeta),
+      orbitalEnergiesAlpha: [...this.virtualEnergiesAlpha],
+      orbitalEnergiesBeta: [...this.virtualEnergiesBeta],
       orbitalCounts: { occupiedAlpha: occupations.alpha, occupiedBeta: occupations.beta, virtualAlpha: this.config.scf.virtualOrbitals, virtualBeta: this.config.scf.virtualOrbitals },
       gridSize: this.config.gridSize,
       energies: { ...result.energies, nuclearKinetic: this.nuclearKineticEnergy() },
