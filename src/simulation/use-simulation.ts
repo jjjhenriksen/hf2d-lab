@@ -14,6 +14,7 @@ type WorkerCommand =
 export interface SolverProgress {
   iteration: number
   residual: number
+  energy: number
   message: string
 }
 
@@ -41,7 +42,7 @@ export function useSimulation(initialConfig: SimulationConfig) {
         setError(null)
         void autosaveSnapshot(response.snapshot)
       } else if (response.type === 'progress') {
-        setProgress({ iteration: response.iteration, residual: response.residual, message: response.message })
+        setProgress({ iteration: response.iteration, residual: response.residual, energy: response.energy, message: response.message })
       } else if (response.type === 'capabilities') setCapabilities(response.capabilities)
       else if (response.type === 'error') {
         setError(response.message)
