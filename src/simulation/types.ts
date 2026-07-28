@@ -74,6 +74,7 @@ export interface ScfDiagnostics {
   usedBestIteration?: boolean
   latestIteration?: number
   usedLatestIteration?: boolean
+  stoppedEarly?: boolean
   residual: number
   energyDelta: number
   durationMs?: number

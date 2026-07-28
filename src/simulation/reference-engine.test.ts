@@ -184,6 +184,23 @@ describe('real-space Hartree–Fock engine', () => {
     expect(snapshot.message).toContain(`retained latest iteration ${latest.iteration}`)
   }, 20000)
 
+  it('turns cancellation into a max-iteration checkpoint', async () => {
+    const config = clonePreset('h2')
+    config.scf.maxIterations = 12
+    config.scf.tolerance = 1e-20
+    config.scf.energyTolerance = 1e-20
+    const engine = new ReferenceHartreeFockEngine(config)
+    const snapshot = await engine.initialize((iteration) => {
+      if (iteration === 1) engine.cancel()
+    })
+    expect(snapshot.status).toBe('failed')
+    expect(snapshot.scf.stoppedEarly).toBe(true)
+    expect(snapshot.scf.converged).toBe(false)
+    expect(snapshot.scf.iteration).toBe(config.scf.maxIterations)
+    expect(snapshot.scf.latestIteration).toBe(1)
+    expect(snapshot.message).toContain('max-iteration checkpoint')
+  }, 20000)
+
   it('requires an explicit opt-in before stepping from the retained iterate', async () => {
     const strictConfig = clonePreset('h2')
     strictConfig.scf.maxIterations = 4

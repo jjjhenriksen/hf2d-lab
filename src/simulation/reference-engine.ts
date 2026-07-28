@@ -18,6 +18,7 @@ interface SolveResult {
   usedBestIteration: boolean
   latestIteration: number
   usedLatestIteration: boolean
+  stoppedEarly: boolean
   energyDelta: number
   converged: boolean
   history: Array<{ iteration: number; residual: number; energy: number }>
@@ -106,7 +107,9 @@ export class ReferenceHartreeFockEngine {
     return this.snapshot(
       result,
       result.converged || canUseApproximate ? 'ready' : 'failed',
-      result.converged
+      result.stoppedEarly
+        ? `SCF stopped early at the max-iteration checkpoint; retained ${result.usedLatestIteration ? `latest iteration ${result.latestIteration}` : `lowest-energy iteration ${result.bestIteration}`}`
+        : result.converged
         ? result.iteration === 0 ? 'No electrons; exact nuclear-only state' : 'SCF converged'
         : canUseApproximate
           ? result.usedLatestIteration
@@ -208,6 +211,7 @@ export class ReferenceHartreeFockEngine {
     let spinDensity = density.slice()
     let converged = false
     let iteration = 0
+    let stoppedEarly = false
     let best: ScfIterate | null = null
     let latest: ScfIterate | null = null
     const alphaAndersonHistory: AndersonHistoryEntry[] = []
@@ -229,6 +233,7 @@ export class ReferenceHartreeFockEngine {
         usedBestIteration: false,
         latestIteration: 0,
         usedLatestIteration: false,
+        stoppedEarly: false,
         energyDelta: 0,
         converged: true,
         history,
@@ -239,7 +244,11 @@ export class ReferenceHartreeFockEngine {
       : this.config.scf.tolerance
 
     for (iteration = 1; iteration <= this.config.scf.maxIterations; iteration += 1) {
-      if (this.cancelled) throw new Error('Calculation cancelled.')
+      if (this.cancelled) {
+        this.cancelled = false
+        stoppedEarly = true
+        break
+      }
       const isRestricted = this.config.method === 'RHF'
       const accelerated = await this.densityAccelerator?.densities(
         this.orbitalsAlpha,
@@ -319,7 +328,7 @@ export class ReferenceHartreeFockEngine {
       if (iteration % 4 === 0) await new Promise<void>((resolve) => setTimeout(resolve, 0))
     }
 
-    iteration = Math.min(iteration, this.config.scf.maxIterations)
+    iteration = stoppedEarly ? this.config.scf.maxIterations : Math.min(iteration, this.config.scf.maxIterations)
     const usedLatestIteration = !converged && this.config.scf.approximateDynamicsPolicy === 'latest-iteration' && latest !== null
     const usedBestIteration = !converged && !usedLatestIteration && best !== null
     const retained = usedLatestIteration ? latest : usedBestIteration ? best : null
@@ -345,6 +354,7 @@ export class ReferenceHartreeFockEngine {
       usedBestIteration,
       latestIteration: latest?.iteration ?? iteration,
       usedLatestIteration,
+      stoppedEarly,
       energyDelta: retained ? retained.energyDelta : history.length > 1 ? Math.abs(history.at(-1)!.energy - history.at(-2)!.energy) : 0,
       converged,
       history,
@@ -537,6 +547,7 @@ export class ReferenceHartreeFockEngine {
         usedBestIteration: result.usedBestIteration,
         latestIteration: result.latestIteration,
         usedLatestIteration: result.usedLatestIteration,
+        stoppedEarly: result.stoppedEarly,
         residual: result.residual,
         durationMs: result.durationMs,
         densityIntegral: result.density.reduce((sum, value) => sum + value * this.spacing * this.spacing, 0),
