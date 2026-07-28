@@ -1,8 +1,19 @@
+import { useEffect, useState } from 'react'
 import type { SimulationSnapshot } from '../simulation/types'
+import type { SolverProgress } from '../simulation/use-simulation'
 
-export function Diagnostics({ snapshot }: { snapshot: SimulationSnapshot | null }) {
+export function Diagnostics({ snapshot, progress }: { snapshot: SimulationSnapshot | null; progress?: SolverProgress | null }) {
+  const [liveHistory, setLiveHistory] = useState<Array<{ iteration: number; residual: number; energy: number }>>([])
+  useEffect(() => {
+    if (!progress) {
+      setLiveHistory([])
+      return
+    }
+    const point = { iteration: progress.iteration, residual: progress.residual, energy: progress.energy }
+    setLiveHistory((current) => progress.iteration <= 1 ? [point] : [...current.filter((entry) => entry.iteration !== progress.iteration), point])
+  }, [progress])
   const trajectory = snapshot?.trajectory ?? []
-  const history = snapshot?.scf.history ?? []
+  const history = progress ? liveHistory : snapshot?.scf.history ?? []
   const densityIntegral = snapshot?.scf.densityIntegral
   return (
     <section

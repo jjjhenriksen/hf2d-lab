@@ -196,7 +196,7 @@ export function App() {
           onImport={handleImport}
         />
       </main>
-      <Diagnostics snapshot={displayedSnapshot} />
+      <Diagnostics snapshot={displayedSnapshot} progress={simulation.progress} />
       <footer className="statusbar" aria-live="polite">
         <span className={`status-indicator ${simulation.error || validationError ? 'is-error' : !needsScf && simulation.snapshot?.scf.converged ? 'is-ready' : ''}`} />
         <span>{simulation.error || validationError || (needsScf ? 'Parameters changed · Solve SCF to apply' : simulation.progress?.message || simulation.snapshot?.message || 'Preparing real-space grid')}</span>
