@@ -164,6 +164,7 @@ export function App() {
         onRun={simulation.run}
         onPause={simulation.pause}
         onSolve={solveScf}
+        onStop={simulation.cancel}
         onStep={simulation.step}
         onReset={resetAppliedConfig}
       />

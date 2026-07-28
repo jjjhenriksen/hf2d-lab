@@ -1,4 +1,4 @@
-import { Atom, Pause, Play, RefreshCw, StepForward } from 'lucide-react'
+import { Atom, Pause, Play, RefreshCw, Square, StepForward } from 'lucide-react'
 
 interface TopBarProps {
   mode: 'guided' | 'sandbox'
@@ -11,11 +11,12 @@ interface TopBarProps {
   onRun: () => void
   onPause: () => void
   onSolve: () => void
+  onStop: () => void
   onStep: () => void
   onReset: () => void
 }
 
-export function TopBar({ mode, isRunning, canRun, isBusy, needsScf, canSolve, onModeChange, onRun, onPause, onSolve, onStep, onReset }: TopBarProps) {
+export function TopBar({ mode, isRunning, canRun, isBusy, needsScf, canSolve, onModeChange, onRun, onPause, onSolve, onStop, onStep, onReset }: TopBarProps) {
   return (
     <header className="topbar">
       <h1>2D Hartree–Fock Lab</h1>
@@ -26,6 +27,9 @@ export function TopBar({ mode, isRunning, canRun, isBusy, needsScf, canSolve, on
       <div className="transport" role="group" aria-label="Simulation controls">
         <button className={needsScf ? 'primary-control' : ''} onClick={onSolve} disabled={!canSolve}>
           <Atom aria-hidden="true" /> Solve SCF
+        </button>
+        <button onClick={onStop} disabled={!isBusy} aria-label="Stop SCF convergence">
+          <Square aria-hidden="true" /> Stop SCF
         </button>
         <button className={!needsScf ? 'primary-control' : ''} onClick={onRun} disabled={!canRun || isRunning}>
           <Play aria-hidden="true" /> Run
