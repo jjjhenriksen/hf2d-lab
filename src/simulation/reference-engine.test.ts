@@ -230,6 +230,20 @@ describe('real-space Hartree–Fock engine', () => {
     expect(reconfigured.trajectory.length).toBeGreaterThan(1)
   }, 20000)
 
+  it('uses the current state as the reset baseline on request', async () => {
+    const config = clonePreset('h2')
+    const engine = new ReferenceHartreeFockEngine(config)
+    await engine.initialize()
+    const baseline = await engine.step()
+    const marked = engine.setResetBaseline()
+    await engine.step()
+    const reset = engine.reset()
+    expect(marked.message).toContain('reset baseline')
+    expect(reset.time).toBeCloseTo(baseline.time, 12)
+    expect(reset.step).toBe(baseline.step)
+    expect(reset.nuclei[0]?.position).toEqual(baseline.nuclei[0]?.position)
+  }, 20000)
+
   it('requires an explicit opt-in before stepping from the retained iterate', async () => {
     const strictConfig = clonePreset('h2')
     strictConfig.scf.maxIterations = 4

@@ -1,4 +1,4 @@
-import { Atom, Pause, Play, RefreshCw, Square, StepForward } from 'lucide-react'
+import { Atom, BookmarkPlus, Pause, Play, RefreshCw, Square, StepForward } from 'lucide-react'
 
 interface TopBarProps {
   mode: 'guided' | 'sandbox'
@@ -14,9 +14,10 @@ interface TopBarProps {
   onStop: () => void
   onStep: () => void
   onReset: () => void
+  onSetBaseline: () => void
 }
 
-export function TopBar({ mode, isRunning, canRun, isBusy, needsScf, canSolve, onModeChange, onRun, onPause, onSolve, onStop, onStep, onReset }: TopBarProps) {
+export function TopBar({ mode, isRunning, canRun, isBusy, needsScf, canSolve, onModeChange, onRun, onPause, onSolve, onStop, onStep, onReset, onSetBaseline }: TopBarProps) {
   return (
     <header className="topbar">
       <h1>2D Hartree–Fock Lab</h1>
@@ -37,6 +38,7 @@ export function TopBar({ mode, isRunning, canRun, isBusy, needsScf, canSolve, on
         <button onClick={onPause} disabled={!isRunning}><Pause aria-hidden="true" /> Pause</button>
         <button onClick={onStep} disabled={!canRun || isRunning || isBusy}><StepForward aria-hidden="true" /> Step</button>
         <button onClick={onReset} disabled={isBusy}><RefreshCw aria-hidden="true" /> Reset</button>
+        <button onClick={onSetBaseline} disabled={isBusy || isRunning || !canRun}><BookmarkPlus aria-hidden="true" /> Set baseline</button>
       </div>
     </header>
   )

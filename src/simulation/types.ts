@@ -131,6 +131,7 @@ export type WorkerRequest =
   | { id: string; type: 'setSpeed'; stepsPerSecond: RunSpeed }
   | { id: string; type: 'pause' }
   | { id: string; type: 'reset'; config: SimulationConfig }
+  | { id: string; type: 'setBaseline' }
   | { id: string; type: 'cancel' }
 
 export type WorkerResponse =
