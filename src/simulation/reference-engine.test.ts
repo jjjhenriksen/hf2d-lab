@@ -1,9 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import { OpenBoundaryConvolver } from './fft2d'
 import { clonePreset } from './presets'
-import { ReferenceHartreeFockEngine } from './reference-engine'
+import { ReferenceHartreeFockEngine, residualMixingStep } from './reference-engine'
 
 describe('real-space Hartree–Fock engine', () => {
+  it('applies residual mixing literally without a stability clamp', () => {
+    expect(residualMixingStep(0)).toBe(0)
+    expect(residualMixingStep(-0.5)).toBe(-1)
+    expect(residualMixingStep(10)).toBe(20)
+  })
+
   it('preserves orbital normalization in a finite SCF run', async () => {
     const config = clonePreset('h2')
     config.scf.maxIterations = 10

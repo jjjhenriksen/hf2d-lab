@@ -29,7 +29,7 @@ export const configSchema: z.ZodType<SimulationConfig> = z.object({
     tolerance: finite.positive(),
     energyTolerance: finite.positive(),
     maxIterations: z.number().int().positive(),
-    mixing: finite.positive(),
+    mixing: finite,
     acceleration: z.enum(['none', 'kinetic-preconditioner']),
     preconditionerShift: finite.positive(),
     allowUnconvergedDynamics: z.boolean(),

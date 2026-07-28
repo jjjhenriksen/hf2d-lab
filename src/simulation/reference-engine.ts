@@ -257,7 +257,7 @@ export class ReferenceHartreeFockEngine {
         converged = true
         break
       }
-      const step = Math.min(0.65, Math.max(0.01, this.config.scf.mixing * 2))
+      const step = residualMixingStep(this.config.scf.mixing)
       const alphaDirection = this.config.scf.acceleration === 'kinetic-preconditioner'
         ? await Promise.all(alphaResiduals.map((field) => this.convolver.precondition(field, this.config.scf.preconditionerShift)))
         : alphaResiduals
@@ -499,6 +499,10 @@ export class ReferenceHartreeFockEngine {
   private emptyComponents(): EnergyComponents {
     return { kinetic: 0, electronNuclear: 0, hartree: 0, exchange: 0, nuclear: 0, nuclearKinetic: 0 }
   }
+}
+
+export function residualMixingStep(mixing: number) {
+  return mixing * 2
 }
 
 function applyKinetic(field: Float64Array, n: number, spacing: number) {

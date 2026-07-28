@@ -89,9 +89,9 @@ export function Inspector(props: InspectorProps) {
         <label className="toggle-row"><span>Approximate dynamics</span><input type="checkbox" checked={config.scf.allowUnconvergedDynamics} disabled={!canEditScfPolicy} onChange={(event) => update((draft) => { draft.scf.allowUnconvergedDynamics = event.target.checked })} /></label>
         <p className="control-note">Off by default. When enabled, a failed solve continues from its lowest-energy finite iteration and remains marked unconverged.</p>
         <SelectField label="Acceleration" value={config.scf.acceleration} disabled={!editable} options={[['kinetic-preconditioner', 'Kinetic preconditioner'], ['none', 'None · residual descent']]} onChange={(value) => update((draft) => { draft.scf.acceleration = value as ScfAcceleration })} />
-        <NumberField label="Residual mixing" value={config.scf.mixing} positive recommendedMin={0.005} recommendedMax={0.325} step={0.01} disabled={!editable} onCommit={(value) => update((draft) => { draft.scf.mixing = value })} />
+        <NumberField label="Residual mixing" value={config.scf.mixing} recommendedMin={0.005} recommendedMax={0.325} step={0.01} disabled={!editable} onCommit={(value) => update((draft) => { draft.scf.mixing = value })} />
         <NumberField label="Preconditioner shift" value={config.scf.preconditionerShift} positive recommendedMin={0.1} recommendedMax={10} step={0.05} disabled={!editable || config.scf.acceleration === 'none'} onCommit={(value) => update((draft) => { draft.scf.preconditionerShift = value })} />
-        <p className="control-note">Residual descent applies no accelerator. The update step is twice the mixing coefficient, clamped to 0.01–0.65; the kinetic preconditioner also uses the positive spectral shift.</p>
+        <p className="control-note">Residual descent applies no accelerator. The update step is twice the mixing coefficient; values outside the recommended range are applied literally and may be unstable.</p>
         <div className="convergence-row">
           <span>Convergence</span>
           <div className="convergence-lights" aria-label={snapshot?.scf.converged ? 'SCF converged' : 'SCF not converged'}>
