@@ -81,6 +81,7 @@ export function Inspector(props: InspectorProps) {
       <InspectorGroup title="View">
         <SelectField label="Field" value={selectedFieldView} options={viewOptions.map(({ id, label }) => [id, label])} onChange={(value) => onFieldViewChange(value as FieldViewId)} />
         <p className="control-note">Orbital views show signed amplitude; occupied and virtual states are listed separately, with RHF paired spatial orbitals shown once.</p>
+        <OrbitalEnergyList config={config} snapshot={snapshot} />
       </InspectorGroup>
 
       <InspectorGroup title="SCF">
@@ -156,6 +157,21 @@ function InspectorGroup({ title, children }: { title: string; children: React.Re
 
 function ReadoutRow({ label, value, unit }: { label: string; value: string; unit?: string }) {
   return <div className="field-row"><span>{label}</span><output>{value}</output>{unit && <small>{unit}</small>}</div>
+}
+
+function OrbitalEnergyList({ config, snapshot }: { config: SimulationConfig; snapshot: SimulationSnapshot | null }) {
+  if (!snapshot) return <p className="control-note">Solve SCF to populate orbital energy levels.</p>
+  const rows: Array<{ label: string; energy: number }> = []
+  const append = (spin: 'α' | 'β', energies: number[], occupied: number, paired: boolean) => energies.forEach((energy, index) => rows.push({
+    label: index < occupied ? `Occupied ${spin}${paired ? ' · paired' : ''} ${index + 1}` : `Virtual ${spin}${paired ? ' · paired' : ''} ${index - occupied + 1}`,
+    energy,
+  }))
+  append('α', snapshot.orbitalEnergiesAlpha ?? [], snapshot.orbitalCounts.occupiedAlpha, config.method === 'RHF')
+  if (config.method === 'UHF') append('β', snapshot.orbitalEnergiesBeta ?? [], snapshot.orbitalCounts.occupiedBeta, false)
+  return <div className="orbital-energy-list" aria-label="Orbital energy levels">
+    <span className="energy-list-title">Orbital energies · au</span>
+    {rows.map((row) => <div className="orbital-energy-row" key={row.label}><span>{row.label}</span><output>{Number.isFinite(row.energy) ? row.energy.toFixed(6) : '—'}</output></div>)}
+  </div>
 }
 
 interface NumberFieldProps {

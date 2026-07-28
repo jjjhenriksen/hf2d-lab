@@ -260,6 +260,10 @@ button:not(:disabled) { cursor: pointer; }
 .field-row output { display: flex; align-items: center; }
 .field-row small { min-width: 20px; color: var(--muted); }
 .field-row select { appearance: auto; }
+.orbital-energy-list { display: grid; gap: 4px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--rule); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
+.energy-list-title { color: var(--muted); font-family: inherit; }
+.orbital-energy-row { display: flex; justify-content: space-between; gap: 12px; color: var(--text); }
+.orbital-energy-row output { color: var(--amber); }
 .control-note { margin: -2px 0 2px; color: var(--muted); font-size: 12px; line-height: 1.45; }
 .field-warning { display: flex; align-items: flex-start; gap: 6px; margin: -3px 0 3px; color: var(--amber); font-size: 12px; line-height: 1.45; }
 .field-warning svg { flex: 0 0 auto; width: 14px; height: 14px; margin-top: 1px; }
