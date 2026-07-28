@@ -40,6 +40,19 @@ describe('simulation contract', () => {
     expect(configSchema.safeParse(config).success).toBe(false)
   })
 
+  it('accepts literal residual mixing values, including zero and negative values', () => {
+    const config = clonePreset('h2')
+
+    config.scf.mixing = 0
+    expect(configSchema.safeParse(config).success).toBe(true)
+
+    config.scf.mixing = -4
+    expect(configSchema.safeParse(config).success).toBe(true)
+
+    config.scf.mixing = Number.POSITIVE_INFINITY
+    expect(configSchema.safeParse(config).success).toBe(false)
+  })
+
   it('rejects incompatible multiplicity and out-of-buffer nuclei', () => {
     const spinInvalid = clonePreset('triatomic')
     spinInvalid.multiplicity = 1
