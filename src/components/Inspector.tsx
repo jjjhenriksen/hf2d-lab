@@ -41,7 +41,7 @@ export function Inspector(props: InspectorProps) {
     <aside className="inspector" aria-label="Simulation inspector">
       <InspectorGroup title="System">
         <ReadoutRow label="Nuclei" value={String(config.nuclei.length)} />
-        <NumberField label="Electrons" value={config.electrons} min={1} max={24} step={1} disabled={!editable} onCommit={(value) => update((draft) => { draft.electrons = Math.round(value) })} />
+        <NumberField label="Electrons" value={config.electrons} min={0} max={24} step={1} disabled={!editable} onCommit={(value) => update((draft) => { draft.electrons = Math.round(value) })} />
         <ReadoutRow label="Charge" value={(config.nuclei.reduce((sum, nucleus) => sum + nucleus.charge, 0) - config.electrons).toFixed(3)} unit="au" />
         {editable && (
           <div className="inline-actions">

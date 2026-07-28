@@ -6,6 +6,7 @@ import { spinOccupations } from './types'
 describe('simulation contract', () => {
   it('derives RHF and UHF spin occupations', () => {
     expect(spinOccupations(4, 1, 'RHF')).toEqual({ alpha: 2, beta: 2 })
+    expect(spinOccupations(0, 1, 'RHF')).toEqual({ alpha: 0, beta: 0 })
     expect(spinOccupations(3, 2, 'UHF')).toEqual({ alpha: 2, beta: 1 })
     expect(() => spinOccupations(3, 1, 'RHF')).toThrow(/even electron/)
   })
@@ -14,6 +15,12 @@ describe('simulation contract', () => {
     expect(configSchema.safeParse(clonePreset('h2')).success).toBe(true)
     expect(configSchema.safeParse(clonePreset('triatomic')).success).toBe(true)
     expect(configSchema.safeParse(clonePreset('collision')).success).toBe(true)
+  })
+
+  it('accepts a zero-electron RHF system', () => {
+    const config = clonePreset('h2')
+    config.electrons = 0
+    expect(configSchema.safeParse(config).success).toBe(true)
   })
 
   it('defaults new options for existing v1 configurations', () => {

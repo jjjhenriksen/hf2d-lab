@@ -10,7 +10,7 @@ export const configSchema: z.ZodType<SimulationConfig> = z.object({
   title: z.string().min(1).max(80),
   description: z.string().min(1).max(400),
   method: z.enum(['RHF', 'UHF']),
-  electrons: z.number().int().min(1).max(24),
+  electrons: z.number().int().min(0).max(24),
   multiplicity: z.number().int().min(1),
   gridSize: z.union([z.literal(64), z.literal(128), z.literal(256)]),
   domainRadius: finite.positive(),
