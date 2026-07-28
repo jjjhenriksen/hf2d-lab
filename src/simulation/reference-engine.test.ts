@@ -34,6 +34,20 @@ describe('real-space Hartree–Fock engine', () => {
     expect(snapshot.density.every(Number.isFinite)).toBe(true)
   }, 20000)
 
+  it('solves a zero-electron system exactly without SCF iterations', async () => {
+    const config = clonePreset('h2')
+    config.electrons = 0
+    const snapshot = await new ReferenceHartreeFockEngine(config).initialize()
+    expect(snapshot.status).toBe('ready')
+    expect(snapshot.message).toContain('exact nuclear-only')
+    expect(snapshot.scf.converged).toBe(true)
+    expect(snapshot.scf.iteration).toBe(0)
+    expect(snapshot.scf.residual).toBe(0)
+    expect(snapshot.scf.history).toEqual([{ iteration: 0, residual: 0, energy: snapshot.energies.nuclear }])
+    expect(snapshot.density.every((value) => value === 0)).toBe(true)
+    expect(snapshot.scf.densityIntegral).toBe(0)
+  }, 20000)
+
   it('preserves orbital normalization in a finite SCF run', async () => {
     const config = clonePreset('h2')
     config.scf.maxIterations = 10
