@@ -61,6 +61,8 @@ export function Inspector(props: InspectorProps) {
       {selected && editable && <NucleusEditor nucleus={selected} onCommit={(field, value) => update((draft) => {
         const nucleus = draft.nuclei.find((item) => item.id === selected.id)!
         if (field === 'charge' || field === 'mass') nucleus[field] = value
+        else if (field === 'x') nucleus.position = [value, nucleus.position[1]]
+        else if (field === 'y') nucleus.position = [nucleus.position[0], value]
         else if (field === 'vx') nucleus.velocity = [value, nucleus.velocity[1]]
         else if (field === 'vy') nucleus.velocity = [nucleus.velocity[0], value]
       })} />}
@@ -218,11 +220,13 @@ function SelectField({ label, value, options, disabled, onChange }: { label: str
   return <label className="field-row"><span>{label}</span><select value={value} disabled={disabled} onChange={(event) => onChange(event.target.value)}>{options.map(([id, text]) => <option key={id} value={id}>{text}</option>)}</select></label>
 }
 
-function NucleusEditor({ nucleus, onCommit }: { nucleus: Nucleus; onCommit: (field: 'charge' | 'mass' | 'vx' | 'vy', value: number) => void }) {
+function NucleusEditor({ nucleus, onCommit }: { nucleus: Nucleus; onCommit: (field: 'charge' | 'mass' | 'x' | 'y' | 'vx' | 'vy', value: number) => void }) {
   return (
     <InspectorGroup title="Selected nucleus">
       <NumberField label="Charge Z" value={nucleus.charge} positive recommendedMin={0.1} recommendedMax={12} step={0.1} onCommit={(value) => onCommit('charge', value)} />
       <NumberField label="Mass" value={nucleus.mass} positive recommendedMin={0.1} recommendedMax={100000} step={1} unit="mₑ" onCommit={(value) => onCommit('mass', value)} />
+      <NumberField label="Position x" value={nucleus.position[0]} recommendedMin={-5} recommendedMax={5} step={0.01} unit="a₀" onCommit={(value) => onCommit('x', value)} />
+      <NumberField label="Position y" value={nucleus.position[1]} recommendedMin={-5} recommendedMax={5} step={0.01} unit="a₀" onCommit={(value) => onCommit('y', value)} />
       <NumberField label="Velocity x" value={nucleus.velocity[0]} recommendedMin={-10} recommendedMax={10} step={0.001} onCommit={(value) => onCommit('vx', value)} />
       <NumberField label="Velocity y" value={nucleus.velocity[1]} recommendedMin={-10} recommendedMax={10} step={0.001} onCommit={(value) => onCommit('vy', value)} />
     </InspectorGroup>

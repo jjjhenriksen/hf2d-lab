@@ -220,7 +220,7 @@ describe('real-space Hartree–Fock engine', () => {
     const engine = new ReferenceHartreeFockEngine(config)
     await engine.initialize()
     const stepped = await engine.step()
-    const next = structuredClone(config)
+    const next = structuredClone(stepped.config)
     next.scf.tolerance = 1e-5
     next.dynamics.damping = 2
     const reconfigured = await engine.reconfigure(next)

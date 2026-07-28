@@ -24,6 +24,7 @@ export function App() {
   const [runSpeed, setRunSpeed] = useState<RunSpeed>(1)
   const [validationError, setValidationError] = useState<string | null>(null)
   const simulation = useSimulation(initialRef.current)
+  const syncedSnapshot = useRef<typeof simulation.snapshot>(null)
   const { pause, run, step } = simulation
   const isRunning = simulation.snapshot?.status === 'running'
   const isBusy = Boolean(simulation.progress)
@@ -35,6 +36,15 @@ export function App() {
   ) && !simulation.error && !validationError
   const canSolve = !isRunning && !isBusy && !validationError
   const activeFieldView = fieldViewOptions(config).some(({ id }) => id === fieldView) ? fieldView : 'density'
+
+  useEffect(() => {
+    const current = simulation.snapshot
+    if (!current || current === syncedSnapshot.current) return
+    syncedSnapshot.current = current
+    if (needsScf) return
+    setConfig(current.config)
+    setAppliedConfig(current.config)
+  }, [needsScf, simulation.snapshot])
 
   const applyConfig = useCallback((next: SimulationConfig) => {
     try {

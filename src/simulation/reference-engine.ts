@@ -716,7 +716,13 @@ function canContinueWithConfig(previous: SimulationConfig, next: SimulationConfi
     && previous.nuclei.length === next.nuclei.length
     && previous.nuclei.every((nucleus, index) => {
       const other = next.nuclei[index]
-      return other?.id === nucleus.id && other.charge === nucleus.charge && other.mass === nucleus.mass
+      return other?.id === nucleus.id
+        && other.charge === nucleus.charge
+        && other.mass === nucleus.mass
+        && other.position[0] === nucleus.position[0]
+        && other.position[1] === nucleus.position[1]
+        && other.velocity[0] === nucleus.velocity[0]
+        && other.velocity[1] === nucleus.velocity[1]
     })
 }
 
