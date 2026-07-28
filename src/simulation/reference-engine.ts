@@ -109,12 +109,17 @@ export class ReferenceHartreeFockEngine {
     this.cancelled = true
   }
 
-  async initialize(progress?: ProgressCallback) {
+  async initialize(progress?: ProgressCallback, preserveState = false) {
     this.cancelled = false
     const result = await this.solve(progress)
     this.lastSolve = result
-    this.initialEnergy = result.totalEnergy
-    this.trajectory = [this.trajectoryPoint(result)]
+    if (!preserveState) {
+      this.initialEnergy = result.totalEnergy
+      this.trajectory = [this.trajectoryPoint(result)]
+    } else {
+      this.trajectory.push(this.trajectoryPoint(result))
+      if (this.trajectory.length > 600) this.trajectory.shift()
+    }
     this.resetCheckpoint = {
       config: structuredClone(this.config),
       orbitalsAlpha: this.orbitalsAlpha.map((orbital) => orbital.slice()),
@@ -162,6 +167,14 @@ export class ReferenceHartreeFockEngine {
   }
 
   async reconfigure(config: SimulationConfig, progress?: ProgressCallback) {
+    const preserveState = canContinueWithConfig(this.config, config)
+    if (preserveState) {
+      const currentNuclei = copyNuclei(this.config.nuclei)
+      this.config = structuredClone(config)
+      this.config.nuclei = currentNuclei
+      this.externalPotential = this.buildExternalPotential()
+      return this.initialize(progress, true)
+    }
     this.config = structuredClone(config)
     this.spacing = (2 * config.domainRadius) / config.gridSize
     this.convolver = this.makeConvolver(config)
@@ -606,6 +619,21 @@ export class ReferenceHartreeFockEngine {
 
 export function residualMixingStep(mixing: number) {
   return mixing * 2
+}
+
+function canContinueWithConfig(previous: SimulationConfig, next: SimulationConfig) {
+  return previous.gridSize === next.gridSize
+    && previous.domainRadius === next.domainRadius
+    && previous.softening === next.softening
+    && previous.referenceLength === next.referenceLength
+    && previous.electrons === next.electrons
+    && previous.method === next.method
+    && previous.multiplicity === next.multiplicity
+    && previous.nuclei.length === next.nuclei.length
+    && previous.nuclei.every((nucleus, index) => {
+      const other = next.nuclei[index]
+      return other?.id === nucleus.id && other.charge === nucleus.charge && other.mass === nucleus.mass
+    })
 }
 
 export function andersonCoefficients(history: Array<Float64Array[]>, regularization: number) {

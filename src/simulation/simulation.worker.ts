@@ -58,6 +58,13 @@ async function solveInitial(request: Extract<WorkerRequest, { type: 'initialize'
   const config = validateConfig(request.config)
   activeRequestId = request.id
   isRunning = false
+  if (request.type === 'reconfigure' && engine && lastSnapshot && sameKernelConfig(lastSnapshot.config, config)) {
+    const snapshot = await engine.reconfigure(config, (iteration, residual, energy) => {
+      if (iteration === 1 || iteration % 4 === 0) send({ id: request.id, type: 'progress', iteration, residual, energy, message: 'Applying parameters to the current state' })
+    })
+    sendSnapshot(request.id, snapshot)
+    return
+  }
   const caps = await capabilities(config.backend)
   send({ id: request.id, type: 'capabilities', capabilities: caps })
   const onProgress = (iteration: number, residual: number, energy: number) => {
@@ -85,6 +92,13 @@ async function solveInitial(request: Extract<WorkerRequest, { type: 'initialize'
   })
   const snapshot = await engine.initialize(onProgress)
   sendSnapshot(request.id, snapshot)
+}
+
+function sameKernelConfig(previous: SimulationSnapshot['config'], next: SimulationSnapshot['config']) {
+  return previous.gridSize === next.gridSize
+    && previous.domainRadius === next.domainRadius
+    && previous.softening === next.softening
+    && previous.referenceLength === next.referenceLength
 }
 
 function resetToCheckpoint(id: string) {

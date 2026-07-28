@@ -215,6 +215,21 @@ describe('real-space Hartree–Fock engine', () => {
     expect(reset.totalEnergy).toBeCloseTo(initial.totalEnergy, 10)
   }, 20000)
 
+  it('preserves dynamics state while applying non-structural parameters', async () => {
+    const config = clonePreset('h2')
+    const engine = new ReferenceHartreeFockEngine(config)
+    await engine.initialize()
+    const stepped = await engine.step()
+    const next = structuredClone(config)
+    next.scf.tolerance = 1e-5
+    next.dynamics.damping = 2
+    const reconfigured = await engine.reconfigure(next)
+    expect(reconfigured.time).toBeCloseTo(stepped.time, 12)
+    expect(reconfigured.step).toBe(stepped.step)
+    expect(reconfigured.nuclei[0]?.position).toEqual(stepped.nuclei[0]?.position)
+    expect(reconfigured.trajectory.length).toBeGreaterThan(1)
+  }, 20000)
+
   it('requires an explicit opt-in before stepping from the retained iterate', async () => {
     const strictConfig = clonePreset('h2')
     strictConfig.scf.maxIterations = 4
