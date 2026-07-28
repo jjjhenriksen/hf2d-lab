@@ -162,6 +162,28 @@ describe('real-space Hartree–Fock engine', () => {
     expect(snapshot.message).toContain(`retained lowest-energy iteration ${best.iteration}`)
   }, 20000)
 
+  it('can retain the latest nonconverged iterate for approximate dynamics', async () => {
+    const config = clonePreset('h2')
+    config.scf.maxIterations = 4
+    config.scf.tolerance = 1e-20
+    config.scf.energyTolerance = 1e-20
+    config.scf.approximateDynamicsPolicy = 'latest-iteration'
+    const snapshot = await new ReferenceHartreeFockEngine(config).initialize()
+    const latest = snapshot.scf.history.at(-1)!
+    const retainedElectronicEnergy = snapshot.energies.kinetic
+      + snapshot.energies.electronNuclear
+      + snapshot.energies.hartree
+      + snapshot.energies.exchange
+      + snapshot.energies.nuclear
+
+    expect(snapshot.scf.converged).toBe(false)
+    expect(snapshot.scf.usedLatestIteration).toBe(true)
+    expect(snapshot.scf.usedBestIteration).toBe(false)
+    expect(snapshot.scf.latestIteration).toBe(latest.iteration)
+    expect(retainedElectronicEnergy).toBeCloseTo(latest.energy, 10)
+    expect(snapshot.message).toContain(`retained latest iteration ${latest.iteration}`)
+  }, 20000)
+
   it('requires an explicit opt-in before stepping from the retained iterate', async () => {
     const strictConfig = clonePreset('h2')
     strictConfig.scf.maxIterations = 4

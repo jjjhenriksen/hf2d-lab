@@ -4,6 +4,7 @@ export type BackendPreference = 'auto' | 'wasm' | 'webgpu'
 export type ActiveBackend = 'wasm' | 'webgpu' | 'typescript'
 export type RunSpeed = number | null
 export type ScfAcceleration = 'none' | 'kinetic-preconditioner' | 'anderson'
+export type ApproximateDynamicsPolicy = 'lowest-energy' | 'latest-iteration'
 export type SimulationStatus = 'idle' | 'solving' | 'ready' | 'running' | 'paused' | 'failed'
 
 export interface Nucleus {
@@ -25,6 +26,7 @@ export interface ScfOptions {
   andersonHistory: number
   andersonRegularization: number
   allowUnconvergedDynamics: boolean
+  approximateDynamicsPolicy: ApproximateDynamicsPolicy
 }
 
 export interface DynamicsOptions {
@@ -70,6 +72,8 @@ export interface ScfDiagnostics {
   iteration: number
   bestIteration?: number
   usedBestIteration?: boolean
+  latestIteration?: number
+  usedLatestIteration?: boolean
   residual: number
   energyDelta: number
   durationMs?: number

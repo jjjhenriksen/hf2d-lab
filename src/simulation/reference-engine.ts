@@ -16,6 +16,8 @@ interface SolveResult {
   iteration: number
   bestIteration: number
   usedBestIteration: boolean
+  latestIteration: number
+  usedLatestIteration: boolean
   energyDelta: number
   converged: boolean
   history: Array<{ iteration: number; residual: number; energy: number }>
@@ -24,6 +26,18 @@ interface SolveResult {
 interface AndersonHistoryEntry {
   orbitals: Float64Array[]
   residuals: Float64Array[]
+}
+
+interface ScfIterate {
+  energy: number
+  iteration: number
+  residual: number
+  energyDelta: number
+  density: Float64Array
+  spinDensity: Float64Array
+  components: EnergyComponents
+  orbitalsAlpha: Float64Array[]
+  orbitalsBeta: Float64Array[]
 }
 
 export interface DensityAccelerator {
@@ -88,15 +102,19 @@ export class ReferenceHartreeFockEngine {
     this.lastSolve = result
     this.initialEnergy = result.totalEnergy
     this.trajectory = [this.trajectoryPoint(result)]
-    const canUseApproximate = this.config.scf.allowUnconvergedDynamics && result.usedBestIteration
+    const canUseApproximate = this.config.scf.allowUnconvergedDynamics && (result.usedBestIteration || result.usedLatestIteration)
     return this.snapshot(
       result,
       result.converged || canUseApproximate ? 'ready' : 'failed',
       result.converged
         ? result.iteration === 0 ? 'No electrons; exact nuclear-only state' : 'SCF converged'
         : canUseApproximate
-          ? `SCF did not converge; using lowest-energy iteration ${result.bestIteration} with approximate dynamics enabled`
-          : `SCF did not converge; retained lowest-energy iteration ${result.bestIteration}`,
+          ? result.usedLatestIteration
+            ? `SCF did not converge; using latest iteration ${result.latestIteration} with approximate dynamics enabled`
+            : `SCF did not converge; using lowest-energy iteration ${result.bestIteration} with approximate dynamics enabled`
+          : result.usedLatestIteration
+            ? `SCF did not converge; retained latest iteration ${result.latestIteration}`
+            : `SCF did not converge; retained lowest-energy iteration ${result.bestIteration}`,
     )
   }
 
@@ -114,7 +132,7 @@ export class ReferenceHartreeFockEngine {
   }
 
   async step(progress?: ProgressCallback) {
-    if (!this.lastSolve?.converged && !(this.config.scf.allowUnconvergedDynamics && this.lastSolve?.usedBestIteration)) {
+    if (!this.lastSolve?.converged && !(this.config.scf.allowUnconvergedDynamics && (this.lastSolve?.usedBestIteration || this.lastSolve?.usedLatestIteration))) {
       throw new Error('A converged SCF state is required before a dynamics step. Enable approximate dynamics to use the retained lowest-energy iterate.')
     }
     const previousNuclei = copyNuclei(this.config.nuclei)
@@ -146,7 +164,7 @@ export class ReferenceHartreeFockEngine {
 
     this.externalPotential = this.buildExternalPotential()
     const result = await this.solve(progress)
-    const canUseApproximate = this.config.scf.allowUnconvergedDynamics && result.usedBestIteration
+    const canUseApproximate = this.config.scf.allowUnconvergedDynamics && (result.usedBestIteration || result.usedLatestIteration)
     if (!result.converged && !canUseApproximate) {
       this.config.nuclei = previousNuclei
       this.orbitalsAlpha = previousAlpha
@@ -174,7 +192,9 @@ export class ReferenceHartreeFockEngine {
       'paused',
       result.converged
         ? 'Accepted converged Born–Oppenheimer step'
-        : `Accepted approximate step from lowest-energy SCF iteration ${result.bestIteration}`,
+        : result.usedLatestIteration
+          ? `Accepted approximate step from latest SCF iteration ${result.latestIteration}`
+          : `Accepted approximate step from lowest-energy SCF iteration ${result.bestIteration}`,
     )
   }
 
@@ -188,17 +208,8 @@ export class ReferenceHartreeFockEngine {
     let spinDensity = density.slice()
     let converged = false
     let iteration = 0
-    let best: {
-      energy: number
-      iteration: number
-      residual: number
-      energyDelta: number
-      density: Float64Array
-      spinDensity: Float64Array
-      components: EnergyComponents
-      orbitalsAlpha: Float64Array[]
-      orbitalsBeta: Float64Array[]
-    } | null = null
+    let best: ScfIterate | null = null
+    let latest: ScfIterate | null = null
     const alphaAndersonHistory: AndersonHistoryEntry[] = []
     const betaAndersonHistory: AndersonHistoryEntry[] = []
     if (this.config.electrons === 0) {
@@ -216,6 +227,8 @@ export class ReferenceHartreeFockEngine {
         iteration: 0,
         bestIteration: 0,
         usedBestIteration: false,
+        latestIteration: 0,
+        usedLatestIteration: false,
         energyDelta: 0,
         converged: true,
         history,
@@ -266,8 +279,8 @@ export class ReferenceHartreeFockEngine {
       if (history.length > 240) history.shift()
       progress?.(iteration, residual, electronic)
 
-      if (Number.isFinite(electronic) && Number.isFinite(residual) && (!best || electronic < best.energy)) {
-        best = {
+      if (Number.isFinite(electronic) && Number.isFinite(residual)) {
+        const candidate = {
           energy: electronic,
           iteration,
           residual,
@@ -278,6 +291,8 @@ export class ReferenceHartreeFockEngine {
           orbitalsAlpha: this.orbitalsAlpha.map((orbital) => orbital.slice()),
           orbitalsBeta: this.orbitalsBeta.map((orbital) => orbital.slice()),
         }
+        latest = candidate
+        if (!best || electronic < best.energy) best = candidate
       }
 
       if (residual <= effectiveTolerance && energyDelta <= Math.max(this.config.scf.energyTolerance, 1e-7)) {
@@ -305,14 +320,16 @@ export class ReferenceHartreeFockEngine {
     }
 
     iteration = Math.min(iteration, this.config.scf.maxIterations)
-    const usedBestIteration = !converged && best !== null
-    if (usedBestIteration && best) {
-      density = best.density
-      spinDensity = best.spinDensity
-      components = best.components
-      residual = best.residual
-      this.orbitalsAlpha = best.orbitalsAlpha
-      this.orbitalsBeta = best.orbitalsBeta
+    const usedLatestIteration = !converged && this.config.scf.approximateDynamicsPolicy === 'latest-iteration' && latest !== null
+    const usedBestIteration = !converged && !usedLatestIteration && best !== null
+    const retained = usedLatestIteration ? latest : usedBestIteration ? best : null
+    if (retained) {
+      density = retained.density
+      spinDensity = retained.spinDensity
+      components = retained.components
+      residual = retained.residual
+      this.orbitalsAlpha = retained.orbitalsAlpha
+      this.orbitalsBeta = retained.orbitalsBeta
     }
     components.nuclearKinetic = this.nuclearKineticEnergy()
     const totalEnergy = Object.values(components).reduce((sum, value) => sum + value, 0)
@@ -326,7 +343,9 @@ export class ReferenceHartreeFockEngine {
       iteration,
       bestIteration: best?.iteration ?? iteration,
       usedBestIteration,
-      energyDelta: usedBestIteration && best ? best.energyDelta : history.length > 1 ? Math.abs(history.at(-1)!.energy - history.at(-2)!.energy) : 0,
+      latestIteration: latest?.iteration ?? iteration,
+      usedLatestIteration,
+      energyDelta: retained ? retained.energyDelta : history.length > 1 ? Math.abs(history.at(-1)!.energy - history.at(-2)!.energy) : 0,
       converged,
       history,
     }
@@ -516,6 +535,8 @@ export class ReferenceHartreeFockEngine {
         iteration: result.iteration,
         bestIteration: result.bestIteration,
         usedBestIteration: result.usedBestIteration,
+        latestIteration: result.latestIteration,
+        usedLatestIteration: result.usedLatestIteration,
         residual: result.residual,
         durationMs: result.durationMs,
         densityIntegral: result.density.reduce((sum, value) => sum + value * this.spacing * this.spacing, 0),
