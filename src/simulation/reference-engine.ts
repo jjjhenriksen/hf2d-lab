@@ -21,6 +21,11 @@ interface SolveResult {
   history: Array<{ iteration: number; residual: number; energy: number }>
 }
 
+interface AndersonHistoryEntry {
+  orbitals: Float64Array[]
+  residuals: Float64Array[]
+}
+
 export interface DensityAccelerator {
   densities: (alpha: Float64Array[], beta: Float64Array[], points: number, gridSize: number, spacing: number) => Promise<{
     alpha: Float64Array
@@ -194,6 +199,8 @@ export class ReferenceHartreeFockEngine {
       orbitalsAlpha: Float64Array[]
       orbitalsBeta: Float64Array[]
     } | null = null
+    const alphaAndersonHistory: AndersonHistoryEntry[] = []
+    const betaAndersonHistory: AndersonHistoryEntry[] = []
     const effectiveTolerance = this.backend === 'webgpu'
       ? Math.max(this.config.scf.tolerance, WEBGPU_RESIDUAL_FLOOR)
       : this.config.scf.tolerance
@@ -261,13 +268,17 @@ export class ReferenceHartreeFockEngine {
       const alphaDirection = this.config.scf.acceleration === 'kinetic-preconditioner'
         ? await Promise.all(alphaResiduals.map((field) => this.convolver.precondition(field, this.config.scf.preconditionerShift)))
         : alphaResiduals
-      this.orbitalsAlpha = updateOrbitals(this.orbitalsAlpha, alphaDirection, step, this.spacing)
+      this.orbitalsAlpha = this.config.scf.acceleration === 'anderson'
+        ? andersonUpdate(this.orbitalsAlpha, alphaResiduals, alphaAndersonHistory, this.config.scf, this.spacing)
+        : updateOrbitals(this.orbitalsAlpha, alphaDirection, step, this.spacing)
       if (isRestricted) this.orbitalsBeta = this.orbitalsAlpha.map((orbital) => orbital.slice())
       else {
         const betaDirection = this.config.scf.acceleration === 'kinetic-preconditioner'
           ? await Promise.all(betaResiduals.map((field) => this.convolver.precondition(field, this.config.scf.preconditionerShift)))
           : betaResiduals
-        this.orbitalsBeta = updateOrbitals(this.orbitalsBeta, betaDirection, step, this.spacing)
+        this.orbitalsBeta = this.config.scf.acceleration === 'anderson'
+          ? andersonUpdate(this.orbitalsBeta, betaResiduals, betaAndersonHistory, this.config.scf, this.spacing)
+          : updateOrbitals(this.orbitalsBeta, betaDirection, step, this.spacing)
       }
       previousEnergy = electronic
       if (iteration % 4 === 0) await new Promise<void>((resolve) => setTimeout(resolve, 0))
@@ -503,6 +514,84 @@ export class ReferenceHartreeFockEngine {
 
 export function residualMixingStep(mixing: number) {
   return mixing * 2
+}
+
+export function andersonCoefficients(history: Array<Float64Array[]>, regularization: number) {
+  const size = history.length
+  if (size < 2) return null
+  const matrix = Array.from({ length: size + 1 }, () => new Float64Array(size + 1))
+  const rhs = new Float64Array(size + 1)
+  rhs[size] = 1
+  for (let row = 0; row < size; row += 1) {
+    for (let column = 0; column < size; column += 1) {
+      matrix[row]![column] = fieldSetInnerProduct(history[row]!, history[column]!)
+    }
+    const matrixRow = matrix[row]!
+    matrixRow[row] = matrixRow[row]! + regularization
+    matrixRow[size] = 1
+    matrix[size]![row] = 1
+  }
+  const solution = solveLinearSystem(matrix, rhs)
+  if (!solution || solution.slice(0, size).some((value) => !Number.isFinite(value))) return null
+  return solution.slice(0, size)
+}
+
+function andersonUpdate(
+  orbitals: Float64Array[],
+  residuals: Float64Array[],
+  history: AndersonHistoryEntry[],
+  options: SimulationConfig['scf'],
+  spacing: number,
+) {
+  history.push({ orbitals: cloneFields(orbitals), residuals: cloneFields(residuals) })
+  while (history.length > options.andersonHistory) history.shift()
+  const coefficients = andersonCoefficients(history.map((entry) => entry.residuals), options.andersonRegularization)
+  if (!coefficients) return updateOrbitals(orbitals, residuals, residualMixingStep(options.mixing), spacing)
+  const extrapolated = orbitals.map((orbital, orbitalIndex) => {
+    const field = new Float64Array(orbital.length)
+    for (let historyIndex = 0; historyIndex < history.length; historyIndex += 1) {
+      const source = history[historyIndex]!.orbitals[orbitalIndex]!
+      const coefficient = coefficients[historyIndex]!
+      for (let point = 0; point < field.length; point += 1) field[point] = field[point]! + coefficient * source[point]!
+    }
+    return field
+  })
+  return orthonormalize(extrapolated, spacing)
+}
+
+function fieldSetInnerProduct(a: Float64Array[], b: Float64Array[]) {
+  let sum = 0
+  for (let index = 0; index < a.length; index += 1) {
+    const left = a[index]!
+    const right = b[index]!
+    for (let point = 0; point < left.length; point += 1) sum += left[point]! * right[point]!
+  }
+  return sum
+}
+
+function solveLinearSystem(matrix: Float64Array[], rhs: Float64Array) {
+  const size = rhs.length
+  const augmented = matrix.map((row, index) => Float64Array.from([...row, rhs[index]!]))
+  for (let column = 0; column < size; column += 1) {
+    let pivot = column
+    for (let row = column + 1; row < size; row += 1) {
+      if (Math.abs(augmented[row]![column]!) > Math.abs(augmented[pivot]![column]!)) pivot = row
+    }
+    if (Math.abs(augmented[pivot]![column]!) < 1e-14) return null
+    ;[augmented[column], augmented[pivot]] = [augmented[pivot]!, augmented[column]!]
+    const divisor = augmented[column]![column]!
+    for (let entry = column; entry <= size; entry += 1) augmented[column]![entry] = augmented[column]![entry]! / divisor
+    for (let row = 0; row < size; row += 1) {
+      if (row === column) continue
+      const factor = augmented[row]![column]!
+      for (let entry = column; entry <= size; entry += 1) augmented[row]![entry] = augmented[row]![entry]! - factor * augmented[column]![entry]!
+    }
+  }
+  return Float64Array.from(augmented.map((row) => row[size]!))
+}
+
+function cloneFields(fields: Float64Array[]) {
+  return fields.map((field) => field.slice())
 }
 
 function applyKinetic(field: Float64Array, n: number, spacing: number) {

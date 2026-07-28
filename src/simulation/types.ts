@@ -3,7 +3,7 @@ export type HartreeFockMethod = 'RHF' | 'UHF'
 export type BackendPreference = 'auto' | 'wasm' | 'webgpu'
 export type ActiveBackend = 'wasm' | 'webgpu' | 'typescript'
 export type RunSpeed = number | null
-export type ScfAcceleration = 'none' | 'kinetic-preconditioner'
+export type ScfAcceleration = 'none' | 'kinetic-preconditioner' | 'anderson'
 export type SimulationStatus = 'idle' | 'solving' | 'ready' | 'running' | 'paused' | 'failed'
 
 export interface Nucleus {
@@ -22,6 +22,8 @@ export interface ScfOptions {
   mixing: number
   acceleration: ScfAcceleration
   preconditionerShift: number
+  andersonHistory: number
+  andersonRegularization: number
   allowUnconvergedDynamics: boolean
 }
 

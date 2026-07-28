@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { OpenBoundaryConvolver } from './fft2d'
 import { clonePreset } from './presets'
-import { ReferenceHartreeFockEngine, residualMixingStep } from './reference-engine'
+import { andersonCoefficients, ReferenceHartreeFockEngine, residualMixingStep } from './reference-engine'
 
 describe('real-space Hartree–Fock engine', () => {
   it('applies residual mixing literally without a stability clamp', () => {
@@ -9,6 +9,30 @@ describe('real-space Hartree–Fock engine', () => {
     expect(residualMixingStep(-0.5)).toBe(-1)
     expect(residualMixingStep(10)).toBe(20)
   })
+
+  it('builds finite Pulay coefficients that preserve the affine constraint', () => {
+    const coefficients = andersonCoefficients([
+      [Float64Array.from([1, 0])],
+      [Float64Array.from([0, 1])],
+    ], 1e-8)
+    expect(coefficients).not.toBeNull()
+    expect(Array.from(coefficients ?? []).every(Number.isFinite)).toBe(true)
+    expect(Array.from(coefficients ?? []).reduce((sum, value) => sum + value, 0)).toBeCloseTo(1, 12)
+  })
+
+  it('runs the configured Anderson acceleration path with finite output', async () => {
+    const config = clonePreset('h2')
+    config.scf.acceleration = 'anderson'
+    config.scf.andersonHistory = 3
+    config.scf.andersonRegularization = 1e-8
+    config.scf.maxIterations = 8
+    config.scf.tolerance = 1e-20
+    config.scf.energyTolerance = 1e-20
+    const snapshot = await new ReferenceHartreeFockEngine(config).initialize()
+    expect(snapshot.scf.iteration).toBe(8)
+    expect(Number.isFinite(snapshot.totalEnergy)).toBe(true)
+    expect(snapshot.density.every(Number.isFinite)).toBe(true)
+  }, 20000)
 
   it('preserves orbital normalization in a finite SCF run', async () => {
     const config = clonePreset('h2')
