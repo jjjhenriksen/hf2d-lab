@@ -93,7 +93,7 @@ export class ReferenceHartreeFockEngine {
       result,
       result.converged || canUseApproximate ? 'ready' : 'failed',
       result.converged
-        ? 'SCF converged'
+        ? result.iteration === 0 ? 'No electrons; exact nuclear-only state' : 'SCF converged'
         : canUseApproximate
           ? `SCF did not converge; using lowest-energy iteration ${result.bestIteration} with approximate dynamics enabled`
           : `SCF did not converge; retained lowest-energy iteration ${result.bestIteration}`,
@@ -201,6 +201,26 @@ export class ReferenceHartreeFockEngine {
     } | null = null
     const alphaAndersonHistory: AndersonHistoryEntry[] = []
     const betaAndersonHistory: AndersonHistoryEntry[] = []
+    if (this.config.electrons === 0) {
+      components = this.energyComponents(density, density, [], [], [], [], 0)
+      components.nuclearKinetic = this.nuclearKineticEnergy()
+      const electronic = components.nuclear
+      history.push({ iteration: 0, residual: 0, energy: electronic })
+      return {
+        density,
+        spinDensity,
+        energies: components,
+        totalEnergy: Object.values(components).reduce((sum, value) => sum + value, 0),
+        residual: 0,
+        durationMs: performance.now() - startedAt,
+        iteration: 0,
+        bestIteration: 0,
+        usedBestIteration: false,
+        energyDelta: 0,
+        converged: true,
+        history,
+      }
+    }
     const effectiveTolerance = this.backend === 'webgpu'
       ? Math.max(this.config.scf.tolerance, WEBGPU_RESIDUAL_FLOOR)
       : this.config.scf.tolerance
