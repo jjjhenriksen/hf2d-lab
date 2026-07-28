@@ -9,6 +9,7 @@ type WorkerCommand =
   | { type: 'pause' }
   | { type: 'step' }
   | { type: 'reset'; config: SimulationConfig }
+  | { type: 'setBaseline' }
   | { type: 'cancel' }
 
 export interface SolverProgress {
@@ -66,6 +67,7 @@ export function useSimulation(initialConfig: SimulationConfig) {
     pause: useCallback(() => post({ type: 'pause' }), [post]),
     step: useCallback(() => post({ type: 'step' }), [post]),
     reset: useCallback((config: SimulationConfig) => post({ type: 'reset', config }), [post]),
+    setBaseline: useCallback(() => post({ type: 'setBaseline' }), [post]),
     cancel: useCallback(() => post({ type: 'cancel' }), [post]),
   }
 }

@@ -107,6 +107,11 @@ function resetToCheckpoint(id: string) {
   sendSnapshot(id, engine.reset())
 }
 
+function setResetBaseline(id: string) {
+  if (!engine) throw new Error('Initialize the solver before setting a reset baseline.')
+  sendSnapshot(id, engine.setResetBaseline())
+}
+
 async function stepOnce(id: string, running: boolean) {
   if (!engine) throw new Error('Initialize the solver before stepping.')
   const snapshot = await engine.step((iteration, residual, energy) => {
@@ -141,6 +146,7 @@ self.onmessage = (event: MessageEvent<WorkerRequest>) => {
     try {
       if (request.type === 'initialize' || request.type === 'reconfigure') await solveInitial(request)
       else if (request.type === 'reset') resetToCheckpoint(request.id)
+      else if (request.type === 'setBaseline') setResetBaseline(request.id)
       else if (request.type === 'step') await stepOnce(request.id, false)
       else if (request.type === 'run') await runLoop(request.id)
       else if (request.type === 'setSpeed') runSpeed = validateRunSpeed(request.stepsPerSecond)

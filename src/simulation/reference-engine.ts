@@ -120,16 +120,7 @@ export class ReferenceHartreeFockEngine {
       this.trajectory.push(this.trajectoryPoint(result))
       if (this.trajectory.length > 600) this.trajectory.shift()
     }
-    this.resetCheckpoint = {
-      config: structuredClone(this.config),
-      orbitalsAlpha: this.orbitalsAlpha.map((orbital) => orbital.slice()),
-      orbitalsBeta: this.orbitalsBeta.map((orbital) => orbital.slice()),
-      lastSolve: result,
-      initialEnergy: this.initialEnergy,
-      time: this.time,
-      stepIndex: this.stepIndex,
-      trajectory: this.trajectory.map((entry) => ({ ...entry, positions: entry.positions.map((position) => [...position] as Vector2) })),
-    }
+    this.captureResetCheckpoint()
     const canUseApproximate = this.config.scf.allowUnconvergedDynamics && (result.usedBestIteration || result.usedLatestIteration)
     return this.snapshot(
       result,
@@ -164,6 +155,26 @@ export class ReferenceHartreeFockEngine {
     this.trajectory = checkpoint.trajectory.map((entry) => ({ ...entry, positions: entry.positions.map((position) => [...position] as Vector2) }))
     const canUseApproximate = this.config.scf.allowUnconvergedDynamics && (this.lastSolve.usedBestIteration || this.lastSolve.usedLatestIteration)
     return this.snapshot(this.lastSolve, this.lastSolve.converged || canUseApproximate ? 'ready' : 'failed', 'Reset to the last solved checkpoint; press Solve SCF to apply new parameters.')
+  }
+
+  setResetBaseline() {
+    if (!this.lastSolve) throw new Error('Solve the simulation before setting a reset baseline.')
+    this.captureResetCheckpoint()
+    return this.snapshot(this.lastSolve, this.lastSolve.converged ? 'ready' : 'failed', 'Current state is now the reset baseline.')
+  }
+
+  private captureResetCheckpoint() {
+    if (!this.lastSolve) return
+    this.resetCheckpoint = {
+      config: structuredClone(this.config),
+      orbitalsAlpha: this.orbitalsAlpha.map((orbital) => orbital.slice()),
+      orbitalsBeta: this.orbitalsBeta.map((orbital) => orbital.slice()),
+      lastSolve: this.lastSolve,
+      initialEnergy: this.initialEnergy,
+      time: this.time,
+      stepIndex: this.stepIndex,
+      trajectory: this.trajectory.map((entry) => ({ ...entry, positions: entry.positions.map((position) => [...position] as Vector2) })),
+    }
   }
 
   async reconfigure(config: SimulationConfig, progress?: ProgressCallback) {

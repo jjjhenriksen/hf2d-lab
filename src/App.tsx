@@ -167,6 +167,7 @@ export function App() {
         onStop={simulation.cancel}
         onStep={simulation.step}
         onReset={resetAppliedConfig}
+        onSetBaseline={simulation.setBaseline}
       />
       <main className="workspace">
         <PresetRail selected={selectedPreset} mode={mode} onSelect={selectPreset} />
