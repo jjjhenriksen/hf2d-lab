@@ -23,6 +23,16 @@ describe('simulation contract', () => {
     expect(configSchema.safeParse(config).success).toBe(true)
   })
 
+  it('accepts a bounded virtual-orbital budget', () => {
+    const config = clonePreset('h2')
+    config.scf.virtualOrbitals = 0
+    expect(configSchema.safeParse(config).success).toBe(true)
+    config.scf.virtualOrbitals = 24
+    expect(configSchema.safeParse(config).success).toBe(true)
+    config.scf.virtualOrbitals = 25
+    expect(configSchema.safeParse(config).success).toBe(false)
+  })
+
   it('defaults new options for existing v1 configurations', () => {
     const legacy = structuredClone(clonePreset('h2')) as unknown as { dynamics: { damping?: number }; scf: { acceleration?: string; preconditionerShift?: number; allowUnconvergedDynamics?: boolean } }
     delete legacy.dynamics.damping

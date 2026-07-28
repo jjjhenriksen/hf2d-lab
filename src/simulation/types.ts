@@ -25,6 +25,7 @@ export interface ScfOptions {
   preconditionerShift: number
   andersonHistory: number
   andersonRegularization: number
+  virtualOrbitals: number
   allowUnconvergedDynamics: boolean
   approximateDynamicsPolicy: ApproximateDynamicsPolicy
 }
@@ -92,6 +93,13 @@ export interface TrajectoryPoint {
   positions: Vector2[]
 }
 
+export interface OrbitalCounts {
+  occupiedAlpha: number
+  occupiedBeta: number
+  virtualAlpha: number
+  virtualBeta: number
+}
+
 export interface SimulationSnapshot {
   schema: 'hf2d-snapshot/v1'
   status: SimulationStatus
@@ -107,6 +115,7 @@ export interface SimulationSnapshot {
   orbitalContours: Float32Array
   orbitalAlpha?: Float32Array
   orbitalBeta?: Float32Array
+  orbitalCounts: OrbitalCounts
   gridSize: number
   energies: EnergyComponents
   totalEnergy: number

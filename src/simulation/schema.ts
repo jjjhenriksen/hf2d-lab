@@ -34,6 +34,7 @@ export const configSchema: z.ZodType<SimulationConfig> = z.object({
     preconditionerShift: finite.positive(),
     andersonHistory: z.number().int().positive(),
     andersonRegularization: finite.nonnegative(),
+    virtualOrbitals: z.number().int().min(0).max(24),
     allowUnconvergedDynamics: z.boolean(),
     approximateDynamicsPolicy: z.enum(['lowest-energy', 'latest-iteration']),
   }),
@@ -64,12 +65,13 @@ export const configSchema: z.ZodType<SimulationConfig> = z.object({
 
 export function validateConfig(input: unknown): SimulationConfig {
   if (!input || typeof input !== 'object') return configSchema.parse(input)
-  const candidate = structuredClone(input) as { dynamics?: { damping?: unknown }; scf?: { acceleration?: unknown; preconditionerShift?: unknown; andersonHistory?: unknown; andersonRegularization?: unknown; allowUnconvergedDynamics?: unknown; approximateDynamicsPolicy?: unknown } }
+  const candidate = structuredClone(input) as { dynamics?: { damping?: unknown }; scf?: { acceleration?: unknown; preconditionerShift?: unknown; andersonHistory?: unknown; andersonRegularization?: unknown; virtualOrbitals?: unknown; allowUnconvergedDynamics?: unknown; approximateDynamicsPolicy?: unknown } }
   if (candidate.dynamics && candidate.dynamics.damping === undefined) candidate.dynamics.damping = 0
   if (candidate.scf && candidate.scf.acceleration === undefined) candidate.scf.acceleration = 'kinetic-preconditioner'
   if (candidate.scf && candidate.scf.preconditionerShift === undefined) candidate.scf.preconditionerShift = 1.25
   if (candidate.scf && candidate.scf.andersonHistory === undefined) candidate.scf.andersonHistory = 4
   if (candidate.scf && candidate.scf.andersonRegularization === undefined) candidate.scf.andersonRegularization = 1e-8
+  if (candidate.scf && candidate.scf.virtualOrbitals === undefined) candidate.scf.virtualOrbitals = 2
   if (candidate.scf && candidate.scf.allowUnconvergedDynamics === undefined) candidate.scf.allowUnconvergedDynamics = false
   if (candidate.scf && candidate.scf.approximateDynamicsPolicy === undefined) candidate.scf.approximateDynamicsPolicy = 'lowest-energy'
   return configSchema.parse(candidate)
