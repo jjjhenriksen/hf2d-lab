@@ -88,9 +88,14 @@ export function Inspector(props: InspectorProps) {
         <NumberField label="Max iterations" value={config.scf.maxIterations} min={1} recommendedMin={10} recommendedMax={1000} step={10} disabled={!editable} onCommit={(value) => update((draft) => { draft.scf.maxIterations = Math.round(value) })} />
         <label className="toggle-row"><span>Approximate dynamics</span><input type="checkbox" checked={config.scf.allowUnconvergedDynamics} disabled={!canEditScfPolicy} onChange={(event) => update((draft) => { draft.scf.allowUnconvergedDynamics = event.target.checked })} /></label>
         <p className="control-note">Off by default. When enabled, a failed solve continues from its lowest-energy finite iteration and remains marked unconverged.</p>
-        <SelectField label="Acceleration" value={config.scf.acceleration} disabled={!editable} options={[['kinetic-preconditioner', 'Kinetic preconditioner'], ['none', 'None · residual descent']]} onChange={(value) => update((draft) => { draft.scf.acceleration = value as ScfAcceleration })} />
+        <SelectField label="Acceleration" value={config.scf.acceleration} disabled={!editable} options={[['kinetic-preconditioner', 'Kinetic preconditioner'], ['anderson', 'Anderson / Pulay'], ['none', 'None · residual descent']]} onChange={(value) => update((draft) => { draft.scf.acceleration = value as ScfAcceleration })} />
         <NumberField label="Residual mixing" value={config.scf.mixing} recommendedMin={0.005} recommendedMax={0.325} step={0.01} disabled={!editable} onCommit={(value) => update((draft) => { draft.scf.mixing = value })} />
         <NumberField label="Preconditioner shift" value={config.scf.preconditionerShift} positive recommendedMin={0.1} recommendedMax={10} step={0.05} disabled={!editable || config.scf.acceleration === 'none'} onCommit={(value) => update((draft) => { draft.scf.preconditionerShift = value })} />
+        {config.scf.acceleration === 'anderson' && <>
+          <NumberField label="Anderson history" value={config.scf.andersonHistory} min={1} recommendedMin={2} recommendedMax={8} step={1} disabled={!editable} onCommit={(value) => update((draft) => { draft.scf.andersonHistory = Math.round(value) })} />
+          <NumberField label="Anderson regularization" value={config.scf.andersonRegularization} min={0} recommendedMin={1e-12} recommendedMax={1e-4} step={1e-8} disabled={!editable} exponential onCommit={(value) => update((draft) => { draft.scf.andersonRegularization = value })} />
+          <p className="control-note">Pulay coefficients use the most recent iterations. A small regularization stabilizes nearly dependent histories.</p>
+        </>}
         <p className="control-note">Residual descent applies no accelerator. The update step is twice the mixing coefficient; values outside the recommended range are applied literally and may be unstable.</p>
         <div className="convergence-row">
           <span>Convergence</span>
