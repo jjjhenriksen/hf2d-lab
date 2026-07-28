@@ -337,6 +337,7 @@ button:not(:disabled) { cursor: pointer; }
 .status-indicator.is-error { background: var(--danger); }
 .status-progress { display: flex; align-items: center; gap: 6px; color: var(--cyan); }
 .status-progress svg { width: 13px; height: 13px; animation: spin 900ms linear infinite; }
+.status-energy { color: var(--text); }
 .statusbar > svg { width: 14px; height: 14px; color: var(--danger); }
 .status-time { margin-left: 10px; }
 .status-model { margin-left: auto; }

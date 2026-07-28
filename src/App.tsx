@@ -201,6 +201,7 @@ export function App() {
         <span className={`status-indicator ${simulation.error || validationError ? 'is-error' : !needsScf && simulation.snapshot?.scf.converged ? 'is-ready' : ''}`} />
         <span>{simulation.error || validationError || (needsScf ? 'Parameters changed · Solve SCF to apply' : simulation.progress?.message || simulation.snapshot?.message || 'Preparing real-space grid')}</span>
         {simulation.progress && <span className="status-progress"><LoaderCircle aria-hidden="true" /> iteration {simulation.progress.iteration} · residual {simulation.progress.residual.toExponential(2)}</span>}
+        <span className="status-energy">E = {(simulation.progress?.energy ?? simulation.snapshot?.totalEnergy ?? 0).toExponential(6)} au</span>
         {(simulation.error || validationError) && <AlertTriangle aria-hidden="true" />}
         <span className="status-time">t = {(simulation.snapshot?.time ?? 0).toFixed(3)} au</span>
         <span className="status-model">Logarithmic 2D potential</span>
