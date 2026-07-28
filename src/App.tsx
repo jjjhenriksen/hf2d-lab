@@ -31,7 +31,7 @@ export function App() {
   const displayedSnapshot = needsScf ? null : simulation.snapshot
   const canRun = Boolean(
     displayedSnapshot?.scf.converged
-    || (appliedConfig.scf.allowUnconvergedDynamics && displayedSnapshot?.scf.usedBestIteration),
+    || (appliedConfig.scf.allowUnconvergedDynamics && (displayedSnapshot?.scf.usedBestIteration || displayedSnapshot?.scf.usedLatestIteration)),
   ) && !simulation.error && !validationError
   const canSolve = !isRunning && !isBusy && !validationError
   const activeFieldView = fieldViewOptions(config).some(({ id }) => id === fieldView) ? fieldView : 'density'
