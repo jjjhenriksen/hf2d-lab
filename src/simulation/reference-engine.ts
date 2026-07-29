@@ -398,19 +398,21 @@ export class ReferenceHartreeFockEngine {
         break
       }
       const step = residualMixingStep(this.config.scf.mixing)
-      const alphaDirection = this.config.scf.acceleration === 'kinetic-preconditioner'
+      // Anderson/Pulay uses the same inverse-kinetic smoothing as the direct
+      // preconditioner path when it builds its residual history.
+      const alphaDirection = this.config.scf.acceleration === 'kinetic-preconditioner' || this.config.scf.acceleration === 'anderson'
         ? await Promise.all(alphaResiduals.map((field) => this.convolver.precondition(field, this.config.scf.preconditionerShift)))
         : alphaResiduals
       this.orbitalsAlpha = this.config.scf.acceleration === 'anderson'
-        ? andersonUpdate(this.orbitalsAlpha, alphaResiduals, alphaAndersonHistory, this.config.scf, this.spacing)
+        ? andersonUpdate(this.orbitalsAlpha, alphaDirection, alphaAndersonHistory, this.config.scf, this.spacing)
         : updateOrbitals(this.orbitalsAlpha, alphaDirection, step, this.spacing)
       if (isRestricted) this.orbitalsBeta = this.orbitalsAlpha.map((orbital) => orbital.slice())
       else {
-        const betaDirection = this.config.scf.acceleration === 'kinetic-preconditioner'
+        const betaDirection = this.config.scf.acceleration === 'kinetic-preconditioner' || this.config.scf.acceleration === 'anderson'
           ? await Promise.all(betaResiduals.map((field) => this.convolver.precondition(field, this.config.scf.preconditionerShift)))
           : betaResiduals
         this.orbitalsBeta = this.config.scf.acceleration === 'anderson'
-          ? andersonUpdate(this.orbitalsBeta, betaResiduals, betaAndersonHistory, this.config.scf, this.spacing)
+          ? andersonUpdate(this.orbitalsBeta, betaDirection, betaAndersonHistory, this.config.scf, this.spacing)
           : updateOrbitals(this.orbitalsBeta, betaDirection, step, this.spacing)
       }
       previousEnergy = electronic
@@ -519,29 +521,49 @@ export class ReferenceHartreeFockEngine {
   }
 
   private async computeVirtualOrbitals(density: Float64Array) {
+    // Canonicalize occupied orbitals first, then solve the virtual problem in
+    // their orthogonal complement with a small Rayleigh–Ritz/Davidson-like
+    // subspace expansion. A seed plus two Fock applications is not an
+    // eigenstate solver and can return arbitrary, poorly ordered fields.
     const count = this.config.scf.virtualOrbitals
     const hartreePotential = await this.convolver.convolve(density)
-    const alphaOccupiedFock = await this.applyFock(this.orbitalsAlpha, hartreePotential, undefined, this.orbitalsAlpha)
-    const alphaOccupiedEnergies = alphaOccupiedFock.orbitals.map((field, index) => innerProduct(this.orbitalsAlpha[index]!, field, this.spacing))
-    const betaOccupiedEnergies = this.config.method === 'RHF'
-      ? [...alphaOccupiedEnergies]
-      : (await this.applyFock(this.orbitalsBeta, hartreePotential, undefined, this.orbitalsBeta)).orbitals.map((field, index) => innerProduct(this.orbitalsBeta[index]!, field, this.spacing))
+    const alphaOccupied = await this.canonicalizeOrbitals(this.orbitalsAlpha, hartreePotential, this.orbitalsAlpha)
+    this.orbitalsAlpha = alphaOccupied.orbitals
+    const betaOccupied = this.config.method === 'RHF'
+      ? { orbitals: this.orbitalsAlpha.map((orbital) => orbital.slice()), energies: [...alphaOccupied.energies] }
+      : await this.canonicalizeOrbitals(this.orbitalsBeta, hartreePotential, this.orbitalsBeta)
+    this.orbitalsBeta = betaOccupied.orbitals
     if (count === 0) {
       this.virtualOrbitalsAlpha = []
       this.virtualOrbitalsBeta = []
       this.virtualEnergiesAlpha = []
       this.virtualEnergiesBeta = []
-      this.orbitalEnergiesAlpha = alphaOccupiedEnergies
-      this.orbitalEnergiesBeta = betaOccupiedEnergies
+      this.orbitalEnergiesAlpha = alphaOccupied.energies
+      this.orbitalEnergiesBeta = betaOccupied.energies
       return
     }
-    const makeVirtuals = (occupied: Float64Array[], spinOffset: number) => orthonormalize([...occupied, ...this.seedOrbitals(count, occupied.length + spinOffset)], this.spacing).slice(occupied.length)
     const solveVirtuals = async (occupied: Float64Array[], spinOffset: number) => {
-      let virtuals = makeVirtuals(occupied, spinOffset)
-      let fock = await this.applyFock(virtuals, hartreePotential, undefined, occupied)
-      virtuals = orthonormalize([...occupied, ...fock.orbitals], this.spacing).slice(occupied.length)
-      fock = await this.applyFock(virtuals, hartreePotential, undefined, occupied)
-      return { virtuals, energies: fock.orbitals.map((field, index) => innerProduct(virtuals[index]!, field, this.spacing)) }
+      let virtuals = orthonormalizeAgainst(this.seedOrbitals(count, occupied.length + spinOffset), occupied, this.spacing)
+      let energies: number[] = []
+      for (let iteration = 0; iteration < 6; iteration += 1) {
+        const fock = await this.applyFock(virtuals, hartreePotential, undefined, occupied)
+        const canonical = diagonalizeSubspace(virtuals, fock.orbitals, this.spacing)
+        virtuals = canonical.orbitals
+        energies = canonical.energies
+        const residuals = canonical.orbitals.map((orbital, index) => {
+          const residual = canonical.fock[index]!.slice()
+          for (let point = 0; point < residual.length; point += 1) residual[point] = residual[point]! - energies[index]! * orbital[point]!
+          return residual
+        })
+        if (fieldSetNorm(residuals, this.spacing) <= Math.max(this.config.scf.tolerance, 1e-8)) break
+        const corrections = await Promise.all(residuals.map((field) => this.convolver.precondition(field, this.config.scf.preconditionerShift)))
+        const expanded = orthonormalizeAgainst([...virtuals, ...corrections], occupied, this.spacing)
+        const expandedFock = await this.applyFock(expanded, hartreePotential, undefined, occupied)
+        const expandedCanonical = diagonalizeSubspace(expanded, expandedFock.orbitals, this.spacing)
+        virtuals = expandedCanonical.orbitals.slice(0, count)
+        energies = expandedCanonical.energies.slice(0, count)
+      }
+      return { virtuals, energies }
     }
     const alpha = await solveVirtuals(this.orbitalsAlpha, 0)
     const beta = this.config.method === 'RHF' ? { virtuals: alpha.virtuals.map((orbital) => orbital.slice()), energies: [...alpha.energies] } : await solveVirtuals(this.orbitalsBeta, 1)
@@ -549,8 +571,14 @@ export class ReferenceHartreeFockEngine {
     this.virtualOrbitalsBeta = beta.virtuals
     this.virtualEnergiesAlpha = alpha.energies
     this.virtualEnergiesBeta = beta.energies
-    this.orbitalEnergiesAlpha = [...alphaOccupiedEnergies, ...alpha.energies]
-    this.orbitalEnergiesBeta = [...betaOccupiedEnergies, ...beta.energies]
+    this.orbitalEnergiesAlpha = [...alphaOccupied.energies, ...alpha.energies]
+    this.orbitalEnergiesBeta = [...betaOccupied.energies, ...beta.energies]
+  }
+
+  private async canonicalizeOrbitals(orbitals: Float64Array[], hartreePotential: Float64Array, exchangeOrbitals: Float64Array[]) {
+    if (orbitals.length === 0) return { orbitals: [], energies: [] }
+    const fock = await this.applyFock(orbitals, hartreePotential, undefined, exchangeOrbitals)
+    return diagonalizeSubspace(orbitals, fock.orbitals, this.spacing)
   }
 
   private async applyFock(orbitals: Float64Array[], hartreePotential: Float64Array, acceleratedKinetic?: Float64Array[], exchangeOrbitals = orbitals) {
@@ -837,6 +865,104 @@ function orthonormalize(fields: Float64Array[], spacing: number) {
     result.push(field)
   }
   return result
+}
+
+function orthonormalizeAgainst(fields: Float64Array[], occupied: Float64Array[], spacing: number) {
+  const result: Float64Array[] = []
+  for (const source of fields) {
+    const field = source.slice()
+    for (const previous of [...occupied, ...result]) {
+      const overlap = innerProduct(previous, field, spacing)
+      for (let i = 0; i < field.length; i += 1) field[i] = field[i]! - overlap * previous[i]!
+    }
+    const norm = Math.sqrt(innerProduct(field, field, spacing))
+    if (!Number.isFinite(norm) || norm <= 1e-12) continue
+    for (let i = 0; i < field.length; i += 1) field[i] = field[i]! / norm
+    result.push(field)
+  }
+  return result
+}
+
+function diagonalizeSubspace(fields: Float64Array[], fockFields: Float64Array[], spacing: number) {
+  const matrix = fields.map((left) => fockFields.map((right) => innerProduct(left, right, spacing)))
+  for (let row = 0; row < matrix.length; row += 1) {
+    for (let column = row + 1; column < matrix.length; column += 1) {
+      const symmetric = 0.5 * (matrix[row]![column]! + matrix[column]![row]!)
+      matrix[row]![column] = symmetric
+      matrix[column]![row] = symmetric
+    }
+  }
+  const { values, vectors } = symmetricEigenproblem(matrix)
+  return {
+    orbitals: rotateFields(fields, vectors),
+    fock: rotateFields(fockFields, vectors),
+    energies: values,
+  }
+}
+
+function rotateFields(fields: Float64Array[], vectors: number[][]) {
+  return vectors[0] === undefined
+    ? []
+    : vectors[0].map((_, column) => {
+        const field = new Float64Array(fields[0]!.length)
+        for (let row = 0; row < fields.length; row += 1) {
+          const coefficient = vectors[row]![column]!
+          for (let point = 0; point < field.length; point += 1) field[point] = field[point]! + coefficient * fields[row]![point]!
+        }
+        return field
+      })
+}
+
+function symmetricEigenproblem(input: number[][]) {
+  const size = input.length
+  const matrix = input.map((row) => [...row])
+  const vectors: number[][] = Array.from({ length: size }, (_, row) => Array.from({ length: size }, (_, column) => row === column ? 1 : 0))
+  const maxIterations = Math.max(12, size * size * 8)
+  for (let iteration = 0; iteration < maxIterations; iteration += 1) {
+    let p = 0
+    let q = 0
+    let largest = 0
+    for (let row = 0; row < size; row += 1) {
+      for (let column = row + 1; column < size; column += 1) {
+        if (Math.abs(matrix[row]![column]!) > largest) {
+          largest = Math.abs(matrix[row]![column]!)
+          p = row
+          q = column
+        }
+      }
+    }
+    if (largest <= 1e-12 || p === q) break
+    const angle = 0.5 * Math.atan2(2 * matrix[p]![q]!, matrix[q]![q]! - matrix[p]![p]!)
+    const cosine = Math.cos(angle)
+    const sine = Math.sin(angle)
+    const app = matrix[p]![p]!
+    const aqq = matrix[q]![q]!
+    const apq = matrix[p]![q]!
+    matrix[p]![p] = cosine * cosine * app - 2 * sine * cosine * apq + sine * sine * aqq
+    matrix[q]![q] = sine * sine * app + 2 * sine * cosine * apq + cosine * cosine * aqq
+    matrix[p]![q] = 0
+    matrix[q]![p] = 0
+    for (let index = 0; index < size; index += 1) {
+      if (index === p || index === q) continue
+      const aip = matrix[index]![p]!
+      const aiq = matrix[index]![q]!
+      matrix[index]![p] = cosine * aip - sine * aiq
+      matrix[p]![index] = matrix[index]![p]!
+      matrix[index]![q] = sine * aip + cosine * aiq
+      matrix[q]![index] = matrix[index]![q]!
+    }
+    for (let row = 0; row < size; row += 1) {
+      const vip = vectors[row]![p]!
+      const viq = vectors[row]![q]!
+      vectors[row]![p] = cosine * vip - sine * viq
+      vectors[row]![q] = sine * vip + cosine * viq
+    }
+  }
+  const order = Array.from({ length: size }, (_, index) => index).sort((a, b) => matrix[a]![a]! - matrix[b]![b]!)
+  return {
+    values: order.map((index) => matrix[index]![index]!),
+    vectors: vectors.map((row) => order.map((index) => row[index]!)),
+  }
 }
 
 function updateOrbitals(orbitals: Float64Array[], residuals: Float64Array[], step: number, spacing: number) {

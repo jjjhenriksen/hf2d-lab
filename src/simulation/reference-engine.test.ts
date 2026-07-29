@@ -284,6 +284,7 @@ describe('real-space Hartree–Fock engine', () => {
     config.scf.maxIterations = 3
     config.scf.tolerance = 1e-20
     config.scf.energyTolerance = 1e-20
+    config.scf.virtualOrbitals = 0
     const spacing = 2 * config.domainRadius / config.gridSize
     const reference = new OpenBoundaryConvolver(config.gridSize, spacing, config.softening, config.referenceLength)
     const shifts: number[] = []
@@ -304,5 +305,30 @@ describe('real-space Hartree–Fock engine', () => {
     await new ReferenceHartreeFockEngine(config, { convolver }).initialize()
     expect(shifts.length).toBeGreaterThan(0)
     expect(shifts.every((shift) => shift === 0.75)).toBe(true)
+
+    shifts.length = 0
+    config.scf.acceleration = 'anderson'
+    await new ReferenceHartreeFockEngine(config, { convolver }).initialize()
+    expect(shifts.length).toBeGreaterThan(0)
+    expect(shifts.every((shift) => shift === 0.75)).toBe(true)
+  }, 20000)
+
+  it('returns canonical occupied and virtual orbitals in ascending energy order', async () => {
+    const config = clonePreset('triatomic')
+    config.scf.maxIterations = 8
+    config.scf.virtualOrbitals = 3
+    const snapshot = await new ReferenceHartreeFockEngine(config).initialize()
+    const ascending = (values: number[]) => values.every((value, index) => index === 0 || values[index - 1]! <= value + 1e-10)
+    const alphaOccupied = snapshot.orbitalEnergiesAlpha!.slice(0, snapshot.orbitalCounts.occupiedAlpha)
+    const alphaVirtual = snapshot.orbitalEnergiesAlpha!.slice(snapshot.orbitalCounts.occupiedAlpha)
+    const betaOccupied = snapshot.orbitalEnergiesBeta!.slice(0, snapshot.orbitalCounts.occupiedBeta)
+    const betaVirtual = snapshot.orbitalEnergiesBeta!.slice(snapshot.orbitalCounts.occupiedBeta)
+
+    expect(ascending(alphaOccupied)).toBe(true)
+    expect(ascending(alphaVirtual)).toBe(true)
+    expect(ascending(betaOccupied)).toBe(true)
+    expect(ascending(betaVirtual)).toBe(true)
+    expect(snapshot.orbitalEnergiesAlpha!.every(Number.isFinite)).toBe(true)
+    expect(snapshot.orbitalEnergiesBeta!.every(Number.isFinite)).toBe(true)
   }, 20000)
 })
