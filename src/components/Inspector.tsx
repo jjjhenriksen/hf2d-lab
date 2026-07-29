@@ -82,7 +82,7 @@ export function Inspector(props: InspectorProps) {
 
       <InspectorGroup title="View">
         <SelectField label="Field" value={selectedFieldView} options={viewOptions.map(({ id, label }) => [id, label])} onChange={(value) => onFieldViewChange(value as FieldViewId)} />
-        <p className="control-note">Orbital views show signed amplitude; occupied and virtual states are listed separately, with RHF paired spatial orbitals shown once.</p>
+        <p className="control-note">Orbital views show signed amplitude; occupied and virtual states are listed separately, with RHF paired spatial orbitals shown once. Energies come from Rayleigh–Ritz diagonalization of the current real-space Fock operator; virtual states are refined in the occupied-orthogonal subspace with a kinetic-preconditioned residual expansion.</p>
         <OrbitalEnergyList config={config} snapshot={snapshot} />
       </InspectorGroup>
 
