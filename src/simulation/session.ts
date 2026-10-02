@@ -5,18 +5,28 @@ import type { SessionManifest, SimulationConfig, SimulationSnapshot } from './ty
 
 const AUTOSAVE_KEY = 'hf2d-session-v1:last-stable'
 
-export async function autosaveSnapshot(snapshot: SimulationSnapshot) {
-  if (!snapshot.scf.converged) return
-  await set(AUTOSAVE_KEY, serializableSnapshot(snapshot))
+export async function autosaveSnapshot(snapshot: SimulationSnapshot): Promise<string | null> {
+  if (!snapshot.scf.converged) return null
+  try {
+    await set(AUTOSAVE_KEY, serializableSnapshot(snapshot))
+    return null
+  } catch {
+    return 'Autosave unavailable. Export your session to keep a copy.'
+  }
 }
 
-export async function restoreAutosave(): Promise<SimulationConfig | null> {
-  const saved = await get(AUTOSAVE_KEY)
-  if (!saved || typeof saved !== 'object') return null
+export async function restoreAutosave(): Promise<{ config: SimulationConfig | null; warning: string | null }> {
+  let saved: unknown
   try {
-    return validateConfig((saved as { config?: unknown }).config)
+    saved = await get(AUTOSAVE_KEY)
   } catch {
-    return null
+    return { config: null, warning: 'Saved session unavailable. You can continue working and export your session.' }
+  }
+  if (!saved || typeof saved !== 'object') return { config: null, warning: null }
+  try {
+    return { config: validateConfig((saved as { config?: unknown }).config), warning: null }
+  } catch {
+    return { config: null, warning: null }
   }
 }
 
