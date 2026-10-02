@@ -95,7 +95,8 @@ async function solveInitial(request: Extract<WorkerRequest, { type: 'initialize'
 }
 
 function sameKernelConfig(previous: SimulationSnapshot['config'], next: SimulationSnapshot['config']) {
-  return previous.gridSize === next.gridSize
+  return previous.backend === next.backend
+    && previous.gridSize === next.gridSize
     && previous.domainRadius === next.domainRadius
     && previous.softening === next.softening
     && previous.referenceLength === next.referenceLength
