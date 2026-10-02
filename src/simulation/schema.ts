@@ -56,7 +56,15 @@ export const configSchema: z.ZodType<SimulationConfig> = z.object({
     ctx.addIssue({ code: 'custom', path: ['multiplicity'], message: 'Multiplicity is incompatible with the electron count.' })
   }
   const margin = config.domainRadius * 0.86
+  const nucleusIds = new Map<string, number>()
   config.nuclei.forEach((nucleus, index) => {
+    const firstIndex = nucleusIds.get(nucleus.id)
+    if (firstIndex !== undefined) {
+      ctx.addIssue({
+        code: 'custom', path: ['nuclei', index, 'id'],
+        message: `Nucleus IDs must be unique; this ID is already used by nucleus ${firstIndex + 1}.`,
+      })
+    } else nucleusIds.set(nucleus.id, index)
     if (Math.abs(nucleus.position[0]) > margin || Math.abs(nucleus.position[1]) > margin) {
       ctx.addIssue({ code: 'custom', path: ['nuclei', index, 'position'], message: 'Nucleus is inside the orbital boundary buffer.' })
     }

@@ -17,6 +17,26 @@ describe('simulation contract', () => {
     expect(configSchema.safeParse(clonePreset('collision')).success).toBe(true)
   })
 
+  it('rejects distinct nuclei sharing an ID with the duplicate ID location', () => {
+    const config = clonePreset('h2')
+    expect(config.nuclei[0]!.position).not.toEqual(config.nuclei[1]!.position)
+    config.nuclei[1]!.id = config.nuclei[0]!.id
+    const parsed = configSchema.safeParse(config)
+    expect(parsed.success).toBe(false)
+    if (parsed.success) throw new Error('Duplicate nucleus ID was accepted')
+    expect(parsed.error.issues).toContainEqual({
+      code: 'custom', path: ['nuclei', 1, 'id'],
+      message: 'Nucleus IDs must be unique; this ID is already used by nucleus 1.',
+    })
+    expect(() => validateConfig(config)).toThrow(/Nucleus IDs must be unique/)
+  })
+
+  it('preserves valid unique nucleus IDs through configuration import', () => {
+    const config = clonePreset('h2')
+    expect(config.nuclei[0]!.id).not.toBe(config.nuclei[1]!.id)
+    expect(validateConfig(JSON.parse(JSON.stringify(config)))).toEqual(config)
+  })
+
   it('accepts a zero-electron RHF system', () => {
     const config = clonePreset('h2')
     config.electrons = 0
