@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { clonePreset } from './presets'
 import type { SimulationConfig, WorkerRequest, WorkerResponse } from './types'
 
+const deviceLoss = vi.hoisted(() => ({ resolve: (_info: { message: string; reason: string }) => {} }))
+
 vi.mock('./wasm-kernel', () => ({
   loadWasmKernel: async () => 'backend-fixture',
   createWasmConvolver: async () => undefined,
@@ -10,7 +12,7 @@ vi.mock('./webgpu', () => ({
   WebGpuDensityAccelerator: {
     create: async () => ({
       adapterLabel: 'Backend selection fixture',
-      lost: new Promise(() => {}),
+      lost: new Promise(resolve => { deviceLoss.resolve = resolve }),
       createConvolver: async () => undefined,
     }),
   },
@@ -47,4 +49,26 @@ describe('worker backend reconfiguration', () => {
     await configure('wasm', 'wasm', 3)
     expect(messages.some(message => message.type === 'error')).toBe(false)
   })
+})
+
+
+it('ignores a late WebGPU device-loss callback after switching to WASM', async () => {
+  const messages: WorkerResponse[] = []
+  const scope = {
+    onmessage: null as ((event: MessageEvent<WorkerRequest>) => void) | null,
+    postMessage: (message: WorkerResponse) => { messages.push(message) },
+  }
+  vi.stubGlobal('self', scope)
+  await import('./simulation.worker')
+  const config = clonePreset('h2')
+  config.electrons = 0
+  for (const backend of ['webgpu', 'wasm'] as const) {
+    scope.onmessage!({ data: { id: backend, type: 'reconfigure', config: { ...config, backend } } } as MessageEvent<WorkerRequest>)
+    await vi.waitFor(() => expect(messages.some(message => message.id === backend && message.type === 'snapshot')).toBe(true))
+  }
+  deviceLoss.resolve({ message: 'Superseded device', reason: 'destroyed' })
+  await Promise.resolve()
+  expect(messages.some(message => message.type === 'error')).toBe(false)
+  scope.onmessage!({ data: { id: 'step', type: 'step' } } as MessageEvent<WorkerRequest>)
+  await vi.waitFor(() => expect(messages.some(message => message.id === 'step' && message.type === 'snapshot')).toBe(true))
 })

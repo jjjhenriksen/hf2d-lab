@@ -27,9 +27,18 @@ export function useSimulation(initialConfig: SimulationConfig) {
   const [error, setError] = useState<string | null>(null)
   const [persistenceWarning, reportPersistenceWarning] = useState<string | null>(null)
   const requestId = useRef(0)
+  const activeResponseId = useRef('')
+  const speedResponseId = useRef('')
 
   const post = useCallback((request: WorkerCommand) => {
     const id = `request-${++requestId.current}`
+    if (request.type === 'setSpeed') speedResponseId.current = id
+    else {
+      activeResponseId.current = id
+      speedResponseId.current = ''
+      setProgress(null)
+      setError(null)
+    }
     workerRef.current?.postMessage({ ...request, id } as WorkerRequest)
   }, [])
 
@@ -40,6 +49,11 @@ export function useSimulation(initialConfig: SimulationConfig) {
     workerRef.current = worker
     worker.onmessage = (event: MessageEvent<WorkerResponse>) => {
       const response = event.data
+      if (!active) return
+      if (response.id !== activeResponseId.current) {
+        if (response.type !== 'error' || response.id !== speedResponseId.current) return
+        speedResponseId.current = ''
+      }
       if (response.type === 'snapshot') {
         setSnapshot(response.snapshot)
         setProgress(null)
@@ -47,7 +61,7 @@ export function useSimulation(initialConfig: SimulationConfig) {
         if (response.snapshot.scf.converged) {
           const generation = ++saveGeneration
           void autosaveSnapshot(response.snapshot).then((warning) => {
-            if (active && generation === saveGeneration) reportPersistenceWarning(warning)
+            if (active && generation === saveGeneration && response.id === activeResponseId.current) reportPersistenceWarning(warning)
           })
         }
       } else if (response.type === 'progress') {
@@ -60,6 +74,8 @@ export function useSimulation(initialConfig: SimulationConfig) {
     }
     worker.onerror = (event) => setError(event.message || 'The simulation worker crashed.')
     const id = `request-${++requestId.current}`
+    activeResponseId.current = id
+    speedResponseId.current = ''
     worker.postMessage({ id, type: 'initialize', config: initialConfig } satisfies WorkerRequest)
     return () => {
       active = false

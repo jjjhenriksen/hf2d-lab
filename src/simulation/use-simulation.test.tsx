@@ -60,3 +60,61 @@ it('ignores late autosave completion after worker cleanup', async () => {
   await act(async () => rejectSave(new Error('Late failure')))
   expect(worker.terminate).toHaveBeenCalledOnce()
 })
+
+it('ignores superseded snapshots, progress, capabilities and errors without autosaving them', async () => {
+  const config = clonePreset('h2')
+  config.electrons = 0
+  const old = await new ReferenceHartreeFockEngine(config).initialize()
+  const latest = { ...old, config: { ...config, domainRadius: 10 } }
+  vi.mocked(set).mockResolvedValue(undefined)
+  const { result } = renderHook(() => useSimulation(config))
+  const worker = FixtureWorker.instances[0]!
+  act(() => result.current.initialize(latest.config))
+  const capabilities = { webgpu: false, wasm: false, selected: 'typescript' as const, reason: 'Latest configuration' }
+  await act(async () => {
+    worker.emit({ id: 'request-2', type: 'capabilities', capabilities })
+    worker.emit({ id: 'request-2', type: 'snapshot', snapshot: latest })
+  })
+  await act(async () => {
+    worker.emit({ id: 'request-1', type: 'snapshot', snapshot: old })
+    worker.emit({ id: 'request-1', type: 'progress', iteration: 4, residual: 1, energy: 2, message: 'Old solve' })
+    worker.emit({ id: 'request-1', type: 'capabilities', capabilities: { ...capabilities, reason: 'Old' } })
+    worker.emit({ id: 'request-1', type: 'error', code: 'SOLVER_ERROR', message: 'Old failure', recoverable: true })
+  })
+  expect(result.current.snapshot).toBe(latest)
+  expect(result.current.capabilities).toBe(capabilities)
+  expect(result.current.progress).toBeNull()
+  expect(result.current.error).toBeNull()
+  expect(set).toHaveBeenCalledOnce()
+})
+
+it('continues accepting run output after a speed change but ignores it after pause', async () => {
+  const config = clonePreset('h2')
+  config.electrons = 0
+  const snapshot = await new ReferenceHartreeFockEngine(config).initialize()
+  vi.mocked(set).mockResolvedValue(undefined)
+  const { result } = renderHook(() => useSimulation(config))
+  const worker = FixtureWorker.instances[0]!
+  act(() => { result.current.run(); result.current.setSpeed(2) })
+  await act(async () => worker.emit({ id: 'request-2', type: 'snapshot', snapshot: { ...snapshot, status: 'running', step: 1 } }))
+  expect(result.current.snapshot?.status).toBe('running')
+  act(() => result.current.pause())
+  const paused = { ...snapshot, status: 'paused' as const, step: 1 }
+  await act(async () => worker.emit({ id: 'request-4', type: 'snapshot', snapshot: paused }))
+  await act(async () => worker.emit({ id: 'request-2', type: 'snapshot', snapshot: { ...snapshot, status: 'running', step: 2 } }))
+  expect(result.current.snapshot).toBe(paused)
+})
+
+it('ignores an obsolete autosave failure after a new command', async () => {
+  const config = clonePreset('h2')
+  config.electrons = 0
+  const snapshot = await new ReferenceHartreeFockEngine(config).initialize()
+  let rejectSave!: (error: Error) => void
+  vi.mocked(set).mockReturnValue(new Promise((_, reject) => { rejectSave = reject }))
+  const { result } = renderHook(() => useSimulation(config))
+  const worker = FixtureWorker.instances[0]!
+  act(() => worker.emit({ id: 'request-1', type: 'snapshot', snapshot }))
+  act(() => result.current.initialize({ ...config, domainRadius: 10 }))
+  await act(async () => rejectSave(new Error('Old write failure')))
+  expect(result.current.persistenceWarning).toBeNull()
+})
