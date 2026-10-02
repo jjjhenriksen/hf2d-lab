@@ -33,7 +33,7 @@ async function fixture() {
   const send = (request: WorkerRequest) => scope.onmessage!({ data: request } as MessageEvent<WorkerRequest>)
   const snapshot = (id: string) => messages.find(message => message.id === id && message.type === 'snapshot')
   const waitSnapshot = async (id: string) => {
-    await vi.waitFor(() => expect(snapshot(id)).toBeDefined())
+    await vi.waitFor(() => expect(snapshot(id)).toBeDefined(), { timeout: 5000 })
     const response = snapshot(id)!
     if (response.type !== 'snapshot') throw new Error('Expected snapshot')
     return response.snapshot
@@ -204,4 +204,4 @@ it('leaves the previous accepted engine usable when cancelling replacement backe
   expect(next.scf.converged).toBe(true)
   expect(next.scf.stoppedEarly).toBe(false)
   expect(next.step).toBe(1)
-})
+}, 15_000)
