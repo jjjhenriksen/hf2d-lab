@@ -81,7 +81,8 @@ export function App() {
   }, [simulation.setSpeed])
 
   useEffect(() => {
-    void restoreAutosave().then((restored) => {
+    void restoreAutosave().then(({ config: restored, warning }) => {
+      simulation.reportPersistenceWarning(warning)
       if (!restored || restored.presetId !== 'custom') return
       setMode('sandbox')
       setSelectedPreset('custom')
@@ -89,7 +90,7 @@ export function App() {
       setAppliedConfig(restored)
       simulation.initialize(restored)
     })
-  }, [simulation.initialize])
+  }, [simulation.initialize, simulation.reportPersistenceWarning])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -219,6 +220,7 @@ export function App() {
         <span className="status-model">Logarithmic 2D potential</span>
         <span>{config.dynamics.damping > 0 ? 'Damped Born–Oppenheimer dynamics' : 'Born–Oppenheimer dynamics'}</span>
         <span className="status-units">Units: a₀ (length) · au (time, energy)</span>
+        {simulation.persistenceWarning && <span className="persistence-warning">{simulation.persistenceWarning}</span>}
       </footer>
     </div>
   )

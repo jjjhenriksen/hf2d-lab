@@ -25,6 +25,7 @@ export function useSimulation(initialConfig: SimulationConfig) {
   const [progress, setProgress] = useState<SolverProgress | null>(null)
   const [capabilities, setCapabilities] = useState<BackendCapabilities | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [persistenceWarning, reportPersistenceWarning] = useState<string | null>(null)
   const requestId = useRef(0)
 
   const post = useCallback((request: WorkerCommand) => {
@@ -33,6 +34,8 @@ export function useSimulation(initialConfig: SimulationConfig) {
   }, [])
 
   useEffect(() => {
+    let active = true
+    let saveGeneration = 0
     const worker = new Worker(new URL('./simulation.worker.ts', import.meta.url), { type: 'module' })
     workerRef.current = worker
     worker.onmessage = (event: MessageEvent<WorkerResponse>) => {
@@ -41,7 +44,12 @@ export function useSimulation(initialConfig: SimulationConfig) {
         setSnapshot(response.snapshot)
         setProgress(null)
         setError(null)
-        void autosaveSnapshot(response.snapshot)
+        if (response.snapshot.scf.converged) {
+          const generation = ++saveGeneration
+          void autosaveSnapshot(response.snapshot).then((warning) => {
+            if (active && generation === saveGeneration) reportPersistenceWarning(warning)
+          })
+        }
       } else if (response.type === 'progress') {
         setProgress({ iteration: response.iteration, residual: response.residual, energy: response.energy, message: response.message })
       } else if (response.type === 'capabilities') setCapabilities(response.capabilities)
@@ -53,7 +61,11 @@ export function useSimulation(initialConfig: SimulationConfig) {
     worker.onerror = (event) => setError(event.message || 'The simulation worker crashed.')
     const id = `request-${++requestId.current}`
     worker.postMessage({ id, type: 'initialize', config: initialConfig } satisfies WorkerRequest)
-    return () => worker.terminate()
+    return () => {
+      active = false
+      worker.terminate()
+      workerRef.current = null
+    }
   }, []) // The worker owns subsequent configuration updates.
 
   return {
@@ -61,6 +73,8 @@ export function useSimulation(initialConfig: SimulationConfig) {
     progress,
     capabilities,
     error,
+    persistenceWarning,
+    reportPersistenceWarning,
     initialize: useCallback((config: SimulationConfig) => post({ type: 'reconfigure', config }), [post]),
     run: useCallback(() => post({ type: 'run' }), [post]),
     setSpeed: useCallback((stepsPerSecond: RunSpeed) => post({ type: 'setSpeed', stepsPerSecond }), [post]),
