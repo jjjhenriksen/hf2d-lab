@@ -117,8 +117,10 @@ async function stepOnce(id: string, running: boolean) {
   const snapshot = await engine.step((iteration, residual, energy) => {
     if (iteration === 1 || iteration % 4 === 0) send({ id, type: 'progress', iteration, residual, energy, message: 'Converging the next Born–Oppenheimer state' })
   })
+  const reachedEnd = running && snapshot.time >= snapshot.config.dynamics.totalTime
+  if (reachedEnd) isRunning = false
   const remainsRunning = running && isRunning
-  sendSnapshot(id, { ...snapshot, status: remainsRunning ? 'running' : 'paused', message: remainsRunning ? 'Running converged dynamics' : running ? 'Paused at accepted checkpoint' : snapshot.message })
+  sendSnapshot(id, { ...snapshot, status: remainsRunning ? 'running' : 'paused', message: remainsRunning ? 'Running converged dynamics' : reachedEnd ? 'Reached requested simulation time.' : running ? 'Paused at accepted checkpoint' : snapshot.message })
   return snapshot
 }
 
@@ -132,8 +134,8 @@ async function runLoop(id: string) {
   isRunning = true
   while (isRunning && engine) {
     const startedAt = performance.now()
-    const snapshot = await stepOnce(id, true)
-    if (snapshot.time >= snapshot.config.dynamics.totalTime) isRunning = false
+    await stepOnce(id, true)
+    if (!isRunning) break
     const delay = pacingDelayMs(runSpeed, performance.now() - startedAt)
     await new Promise<void>((resolve) => setTimeout(resolve, delay))
   }
