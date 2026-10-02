@@ -15,9 +15,18 @@ let accelerator: WebGpuDensityAccelerator | null = null
 let lastSnapshot: SimulationSnapshot | null = null
 let wasmVersion: string | null = null
 let runSpeed: RunSpeed = 1
+let generation = 0
+let operationGeneration = 0
+let operationCancelled = false
+let operationActive = false
+let solvingEngine: ReferenceHartreeFockEngine | null = null
+let commandSerial = 0
+let operations = Promise.resolve()
+let wakeRun: (() => void) | null = null
+let lastCapabilities: BackendCapabilities | null = null
 
 function send(message: WorkerResponse) {
-  self.postMessage(message)
+  if (operationGeneration === generation) self.postMessage(message)
 }
 
 async function capabilities(preference: 'auto' | 'wasm' | 'webgpu'): Promise<BackendCapabilities> {
@@ -33,13 +42,19 @@ async function capabilities(preference: 'auto' | 'wasm' | 'webgpu'): Promise<Bac
   }
   if (preference !== 'wasm') {
     try {
-      accelerator ??= await WebGpuDensityAccelerator.create()
+      if (!accelerator) {
+        const device = await WebGpuDensityAccelerator.create()
+        accelerator = device
+        device.lost.then((info) => {
+          if (accelerator !== device) return
+          accelerator = null
+          if (lastCapabilities?.selected !== 'webgpu' || operationGeneration !== generation) return
+          isRunning = false
+          wakeRun?.()
+          send({ id: activeRequestId, type: 'error', code: 'WEBGPU_DEVICE_LOST', message: `WebGPU device lost: ${info.message || info.reason}`, recoverable: true })
+        }).catch(() => undefined)
+      }
       webgpu = true
-      accelerator.lost.then((info) => {
-        accelerator = null
-        isRunning = false
-        send({ id: activeRequestId, type: 'error', code: 'WEBGPU_DEVICE_LOST', message: `WebGPU device lost: ${info.message || info.reason}`, recoverable: true })
-      }).catch(() => undefined)
     } catch (error) {
       webgpuFailure = error instanceof Error ? error.message : 'WebGPU initialization failed.'
     }
@@ -54,18 +69,27 @@ async function capabilities(preference: 'auto' | 'wasm' | 'webgpu'): Promise<Bac
   return { webgpu, wasm, selected, reason, webgpuAdapter }
 }
 
+async function solveOnEngine(target: ReferenceHartreeFockEngine, solve: (target: ReferenceHartreeFockEngine) => Promise<SimulationSnapshot>) {
+  solvingEngine = target
+  try { return await solve(target) }
+  finally { solvingEngine = null }
+}
+
 async function solveInitial(request: Extract<WorkerRequest, { type: 'initialize' | 'reconfigure' }>) {
   const config = validateConfig(request.config)
   activeRequestId = request.id
   isRunning = false
   if (request.type === 'reconfigure' && engine && lastSnapshot && sameKernelConfig(lastSnapshot.config, config)) {
-    const snapshot = await engine.reconfigure(config, (iteration, residual, energy) => {
+    if (lastCapabilities) send({ id: request.id, type: 'capabilities', capabilities: lastCapabilities })
+    const snapshot = await solveOnEngine(engine, target => target.reconfigure(config, (iteration, residual, energy) => {
       if (iteration === 1 || iteration % 4 === 0) send({ id: request.id, type: 'progress', iteration, residual, energy, message: 'Applying parameters to the current state' })
-    })
+    }))
     sendSnapshot(request.id, snapshot)
     return
   }
   const caps = await capabilities(config.backend)
+  if (operationCancelled) throw new Error('Solver cancelled before initialization.')
+  if (operationGeneration !== generation) return
   send({ id: request.id, type: 'capabilities', capabilities: caps })
   const onProgress = (iteration: number, residual: number, energy: number) => {
     if (iteration === 1 || iteration % 4 === 0) send({ id: request.id, type: 'progress', iteration, residual, energy, message: 'Optimizing occupied orbitals' })
@@ -84,13 +108,16 @@ async function solveInitial(request: Extract<WorkerRequest, { type: 'initialize'
         return convolver
       }
     : undefined
+  if (operationCancelled) throw new Error('Solver cancelled before initialization.')
+  if (operationGeneration !== generation) return
   engine = new ReferenceHartreeFockEngine(config, {
     convolver,
     makeConvolver,
     backend: caps.selected,
     densityAccelerator: caps.selected === 'webgpu' ? accelerator ?? undefined : undefined,
   })
-  const snapshot = await engine.initialize(onProgress)
+  lastCapabilities = caps
+  const snapshot = await solveOnEngine(engine, target => target.initialize(onProgress))
   sendSnapshot(request.id, snapshot)
 }
 
@@ -115,9 +142,9 @@ function setResetBaseline(id: string) {
 
 async function stepOnce(id: string, running: boolean) {
   if (!engine) throw new Error('Initialize the solver before stepping.')
-  const snapshot = await engine.step((iteration, residual, energy) => {
+  const snapshot = await solveOnEngine(engine, target => target.step((iteration, residual, energy) => {
     if (iteration === 1 || iteration % 4 === 0) send({ id, type: 'progress', iteration, residual, energy, message: 'Converging the next Born–Oppenheimer state' })
-  })
+  }))
   const reachedEnd = running && snapshot.time >= snapshot.config.dynamics.totalTime
   if (reachedEnd) isRunning = false
   const remainsRunning = running && isRunning
@@ -138,28 +165,64 @@ async function runLoop(id: string) {
     await stepOnce(id, true)
     if (!isRunning) break
     const delay = pacingDelayMs(runSpeed, performance.now() - startedAt)
-    await new Promise<void>((resolve) => setTimeout(resolve, delay))
+    await new Promise<void>((resolve) => {
+      const finish = () => {
+        clearTimeout(timer)
+        if (wakeRun === finish) wakeRun = null
+        resolve()
+      }
+      const timer = setTimeout(finish, delay)
+      wakeRun = finish
+    })
   }
 }
 
+// Only this queue may mutate the engine. Stop signals are handled on arrival so
+// a long run or pacing delay cannot prevent queued commands from taking effect.
 self.onmessage = (event: MessageEvent<WorkerRequest>) => {
   const request = event.data
-  activeRequestId = request.id
-  void (async () => {
+  if (request.type === 'setSpeed') {
+    try { runSpeed = validateRunSpeed(request.stepsPerSecond) }
+    catch (error) {
+      self.postMessage({ id: request.id, type: 'error', code: 'SOLVER_ERROR', message: error instanceof Error ? error.message : 'Invalid run speed.', recoverable: true } satisfies WorkerResponse)
+    }
+    return
+  }
+  const serial = ++commandSerial
+  if (request.type === 'initialize' || request.type === 'reconfigure' || request.type === 'reset' || request.type === 'cancel') generation++
+  const requestedGeneration = generation
+  isRunning = false
+  wakeRun?.()
+  if (request.type === 'cancel' && operationActive) {
+    operationCancelled = true
+    solvingEngine?.cancel()
+  }
+  operations = operations.then(async () => {
+    // Discard commands queued for a configuration that the user replaced.
+    if (requestedGeneration !== generation || (request.type === 'run' && serial !== commandSerial)) return
+    activeRequestId = request.id
+    operationGeneration = requestedGeneration
+    operationCancelled = false
+    operationActive = true
     try {
       if (request.type === 'initialize' || request.type === 'reconfigure') await solveInitial(request)
-      else if (request.type === 'reset') resetToCheckpoint(request.id)
-      else if (request.type === 'setBaseline') setResetBaseline(request.id)
-      else if (request.type === 'step') await stepOnce(request.id, false)
-      else if (request.type === 'run') await runLoop(request.id)
-      else if (request.type === 'setSpeed') runSpeed = validateRunSpeed(request.stepsPerSecond)
-      else if (request.type === 'pause') {
-        isRunning = false
-        if (lastSnapshot) sendSnapshot(request.id, { ...lastSnapshot, status: 'paused', message: 'Paused at accepted checkpoint' })
-      }
-      else if (request.type === 'cancel') {
-        isRunning = false
-        engine?.cancel()
+      else {
+        if (lastCapabilities) send({ id: request.id, type: 'capabilities', capabilities: lastCapabilities })
+        if (request.type === 'reset') resetToCheckpoint(request.id)
+        else if (request.type === 'setBaseline') setResetBaseline(request.id)
+        else if (request.type === 'step') await stepOnce(request.id, false)
+        else if (request.type === 'run') await runLoop(request.id)
+        else if (request.type === 'pause' || request.type === 'cancel') {
+          if (lastSnapshot) {
+            const retainSolverMessage = lastSnapshot.status === 'failed' || (request.type === 'cancel' && lastSnapshot.scf.stoppedEarly)
+            sendSnapshot(request.id, {
+              ...lastSnapshot,
+              status: lastSnapshot.status === 'failed' ? 'failed' : 'paused',
+              message: retainSolverMessage ? lastSnapshot.message : 'Paused at accepted checkpoint',
+            })
+          }
+          else if (request.type === 'cancel') throw new Error('Solver cancelled before a checkpoint was available.')
+        }
       }
     } catch (error) {
       isRunning = false
@@ -170,6 +233,8 @@ self.onmessage = (event: MessageEvent<WorkerRequest>) => {
         message: error instanceof Error ? error.message : 'Unknown worker failure.',
         recoverable: true,
       })
+    } finally {
+      operationActive = false
     }
-  })()
+  })
 }
