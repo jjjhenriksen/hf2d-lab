@@ -15,6 +15,8 @@ import { useSimulation } from './simulation/use-simulation'
 
 export function App() {
   const initialRef = useRef(clonePreset('h2'))
+  const startupGeneration = useRef(0)
+  const recordInteraction = useCallback(() => { startupGeneration.current += 1 }, [])
   const [config, setConfig] = useState<SimulationConfig>(initialRef.current)
   const [appliedConfig, setAppliedConfig] = useState<SimulationConfig>(initialRef.current)
   const [mode, setMode] = useState<'guided' | 'sandbox'>('guided')
@@ -81,7 +83,10 @@ export function App() {
   }, [simulation.setSpeed])
 
   useEffect(() => {
+    let active = true
+    const generation = startupGeneration.current
     void restoreAutosave().then(({ config: restored, warning }) => {
+      if (!active || generation !== startupGeneration.current) return
       simulation.reportPersistenceWarning(warning)
       if (!restored || restored.presetId !== 'custom') return
       setMode('sandbox')
@@ -90,20 +95,22 @@ export function App() {
       setAppliedConfig(restored)
       simulation.initialize(restored)
     })
+    return () => { active = false }
   }, [simulation.initialize, simulation.reportPersistenceWarning])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement || event.target instanceof HTMLTextAreaElement) return
       if (event.code === 'Space') {
+        recordInteraction()
         event.preventDefault()
         if (isRunning) pause(); else if (canRun) run()
-      } else if (event.key === '.' && canRun && !isRunning) step()
-      else if (event.key.toLowerCase() === 'r' && !isBusy) resetAppliedConfig()
+      } else if (event.key === '.' && canRun && !isRunning) { recordInteraction(); step() }
+      else if (event.key.toLowerCase() === 'r' && !isBusy) { recordInteraction(); resetAppliedConfig() }
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [canRun, isBusy, isRunning, pause, resetAppliedConfig, run, step])
+  }, [canRun, isBusy, isRunning, pause, recordInteraction, resetAppliedConfig, run, step])
 
   const selectPreset = (id: Exclude<PresetId, 'custom'>) => {
     const next = clonePreset(id)
@@ -162,7 +169,7 @@ export function App() {
   }
 
   return (
-    <div className="app-shell">
+    <div className="app-shell" onPointerDownCapture={recordInteraction} onKeyDownCapture={recordInteraction} onClickCapture={recordInteraction} onChangeCapture={recordInteraction}>
       <a className="skip-link" href="#simulation-canvas">Skip to simulation canvas</a>
       <TopBar
         mode={mode}
