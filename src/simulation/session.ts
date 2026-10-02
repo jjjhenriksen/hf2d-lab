@@ -1,6 +1,7 @@
 import { get, set } from 'idb-keyval'
-import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
+import { strToU8, zipSync } from 'fflate'
 import { validateConfig } from './schema'
+import { MAX_SESSION_COMPRESSED_BYTES, type SessionImportResponse } from './session-archive'
 import type { SessionManifest, SimulationConfig, SimulationSnapshot } from './types'
 
 const AUTOSAVE_KEY = 'hf2d-session-v1:last-stable'
@@ -64,14 +65,32 @@ export function exportSession(snapshot: SimulationSnapshot, preview: Blob | null
   }) ?? Promise.resolve(new Blob([zipSync(files, { level: 6 }) as Uint8Array<ArrayBuffer>], { type: 'application/zip' }))
 }
 
-export async function importSession(file: File) {
-  const archive = unzipSync(new Uint8Array(await file.arrayBuffer()))
-  const manifestBytes = archive['manifest.json']
-  const configBytes = archive['config.json']
-  if (!manifestBytes || !configBytes) throw new Error('Session bundle is missing manifest.json or config.json.')
-  const manifest = JSON.parse(strFromU8(manifestBytes)) as { schema?: string }
-  if (manifest.schema !== 'hf2d-session/v1') throw new Error(`Unsupported session schema: ${manifest.schema ?? 'missing'}`)
-  return validateConfig(JSON.parse(strFromU8(configBytes)))
+export async function importSession(file: File): Promise<SimulationConfig> {
+  if (file.size > MAX_SESSION_COMPRESSED_BYTES) throw new Error('Session ZIP exceeds the 16 MiB compressed limit. Choose a smaller bundle.')
+  const bytes = new Uint8Array(await file.arrayBuffer())
+  const worker = new Worker(new URL('./session-import.worker.ts', import.meta.url), { type: 'module' })
+  return new Promise((resolve, reject) => {
+    let settled = false
+    const finish = (config: SimulationConfig | null, error?: string) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timeout)
+      worker.terminate()
+      if (config) resolve(config)
+      else reject(new Error(error ?? 'Unable to import session ZIP.'))
+    }
+    const timeout = setTimeout(() => finish(null, 'Import took too long. Choose a smaller session ZIP.'), 10000)
+    worker.onmessage = (event: MessageEvent<SessionImportResponse>) => {
+      const result = event.data
+      finish(result.config ?? null, result.error)
+    }
+    worker.onerror = (event) => {
+      event.preventDefault()
+      finish(null, 'Unable to read session ZIP. Choose a valid HF2D session bundle.')
+    }
+    try { worker.postMessage(bytes, [bytes.buffer]) }
+    catch { finish(null, 'Unable to start session import. Try again.') }
+  })
 }
 
 export function downloadBlob(blob: Blob, filename: string) {

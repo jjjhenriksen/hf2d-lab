@@ -2,7 +2,8 @@ import { strFromU8, unzipSync } from 'fflate'
 import { describe, expect, it } from 'vitest'
 import { clonePreset } from './presets'
 import { ReferenceHartreeFockEngine } from './reference-engine'
-import { exportSession, importSession } from './session'
+import { exportSession } from './session'
+import { readSessionArchive } from './session-archive'
 
 describe('hf2d-session/v1 bundle', () => {
   it('exports restart data, orbitals, diagnostics, and a valid import configuration', async () => {
@@ -20,8 +21,7 @@ describe('hf2d-session/v1 bundle', () => {
     expect(manifest.schema).toBe('hf2d-session/v1')
     expect(archive['orbitals-alpha.f32']!.byteLength).toBeGreaterThan(0)
 
-    const file = new File([bytes as Uint8Array<ArrayBuffer>], 'session.hf2d.zip', { type: 'application/zip' })
-    const imported = await importSession(file)
+    const imported = readSessionArchive(bytes)
     expect(imported).toEqual(config)
   }, 20000)
 })
