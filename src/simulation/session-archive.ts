@@ -8,6 +8,7 @@ const MAX_JSON_BYTES = 256 * 1024
 const SESSION_ENTRIES = new Set([
   'manifest.json', 'config.json', 'checkpoint.json', 'density.f32', 'spin-density.f32',
   'orbitals-alpha.f32', 'orbitals-beta.f32', 'trajectory.csv', 'diagnostics.csv', 'preview.png',
+  'virtual-orbitals-alpha.f32', 'virtual-orbitals-beta.f32', 'orbital-energies.csv',
 ])
 
 export type SessionImportResponse = { config: SimulationConfig; error?: never } | { error: string; config?: never }
@@ -18,7 +19,7 @@ export function readSessionArchive(bytes: Uint8Array): SimulationConfig {
   const entries = new Set<string>()
   let expandedBytes = 0
   unzipSync(bytes, { filter: (entry) => {
-    if (entries.size >= SESSION_ENTRIES.size) throw new Error('Session ZIP contains too many entries (maximum 10).')
+    if (entries.size >= SESSION_ENTRIES.size) throw new Error(`Session ZIP contains too many entries (maximum ${SESSION_ENTRIES.size}).`)
     if (!SESSION_ENTRIES.has(entry.name)) throw new Error(`Unexpected session entry: ${entry.name}. Choose an HF2D session bundle.`)
     if (entries.has(entry.name)) throw new Error(`Duplicate session entry: ${entry.name}.`)
     entries.add(entry.name)
