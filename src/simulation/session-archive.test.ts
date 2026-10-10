@@ -36,7 +36,8 @@ describe('session ZIP metadata preflight', () => {
   it('rejects too many entries before extraction', () => {
     const entries = { ...files(), 'checkpoint.json': strToU8('{}'), 'density.f32': new Uint8Array(),
       'spin-density.f32': new Uint8Array(), 'orbitals-alpha.f32': new Uint8Array(), 'orbitals-beta.f32': new Uint8Array(),
-      'trajectory.csv': new Uint8Array(), 'diagnostics.csv': new Uint8Array(), 'preview.png': new Uint8Array(), 'extra': new Uint8Array() }
+      'trajectory.csv': new Uint8Array(), 'diagnostics.csv': new Uint8Array(), 'preview.png': new Uint8Array(), 'virtual-orbitals-alpha.f32': new Uint8Array(), 'virtual-orbitals-beta.f32': new Uint8Array(),
+      'orbital-energies.csv': new Uint8Array(), 'extra': new Uint8Array() }
     expect(() => readSessionArchive(zipSync(entries))).toThrow('too many entries')
   })
 

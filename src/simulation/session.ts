@@ -56,6 +56,9 @@ export function exportSession(snapshot: SimulationSnapshot, preview: Blob | null
     'spin-density.f32': floatBytes(snapshot.spinDensity),
     'orbitals-alpha.f32': floatBytes(snapshot.orbitalAlpha ?? new Float32Array()),
     'orbitals-beta.f32': floatBytes(snapshot.orbitalBeta ?? new Float32Array()),
+    'virtual-orbitals-alpha.f32': floatBytes(snapshot.virtualOrbitalAlpha ?? new Float32Array()),
+    'virtual-orbitals-beta.f32': floatBytes(snapshot.virtualOrbitalBeta ?? new Float32Array()),
+    'orbital-energies.csv': strToU8(orbitalEnergyCsv(snapshot)),
     'trajectory.csv': strToU8(trajectoryHeader + trajectoryRows),
     'diagnostics.csv': strToU8(diagnosticsHeader + diagnosticRows),
   }
@@ -110,6 +113,9 @@ function serializableSnapshot(snapshot: SimulationSnapshot) {
     step: snapshot.step,
     config: snapshot.config,
     nuclei: snapshot.nuclei,
+    orbitalCounts: snapshot.orbitalCounts,
+    orbitalEnergiesAlpha: snapshot.orbitalEnergiesAlpha ?? [],
+    orbitalEnergiesBeta: snapshot.orbitalEnergiesBeta ?? [],
     totalEnergy: snapshot.totalEnergy,
     energyDrift: snapshot.energyDrift,
     scf: snapshot.scf,
@@ -117,6 +123,15 @@ function serializableSnapshot(snapshot: SimulationSnapshot) {
     backend: snapshot.backend,
     precision: snapshot.precision,
   }
+}
+
+function orbitalEnergyCsv(snapshot: SimulationSnapshot) {
+  const rows = (['alpha', 'beta'] as const).flatMap((spin) => {
+    const energies = (spin === 'alpha' ? snapshot.orbitalEnergiesAlpha : snapshot.orbitalEnergiesBeta) ?? []
+    const occupied = spin === 'alpha' ? snapshot.orbitalCounts.occupiedAlpha : snapshot.orbitalCounts.occupiedBeta
+    return energies.map((energy, index) => [spin, index + 1, index < occupied ? 'occupied' : 'virtual', energy].join(','))
+  })
+  return 'spin,index,kind,energy\n' + rows.join('\n')
 }
 
 function floatBytes(values: Float32Array) {

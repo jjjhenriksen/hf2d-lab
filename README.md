@@ -65,7 +65,7 @@ Recommended numerical ranges are advisory rather than hard limits. The inspector
 
 ## Data
 
-Session export produces an `hf2d-session/v1` ZIP containing the configuration, checkpoint metadata, density and orbital buffers, trajectory and convergence CSV files, backend metadata, and a PNG preview. The last stable configuration is autosaved locally in IndexedDB.
+Session export produces an `hf2d-session/v1` ZIP containing the configuration, checkpoint metadata, density and orbital buffers, trajectory and convergence CSV files, backend metadata, and a PNG preview. Exports include occupied and virtual alpha/beta orbital buffers, plus `orbital-energies.csv` with spin, one-based orbital index, occupied/virtual kind, and energy in model atomic units. `checkpoint.json` retains orbital counts and energy arrays; configuration import continues to restart the solver rather than replay the saved numerical fields. The last stable configuration is autosaved locally in IndexedDB.
 
 ## Limits
 
